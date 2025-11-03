@@ -1,0 +1,545 @@
+{
+  "openapi": "3.0.2",
+  "info": {
+    "title": "VisGuiAI API",
+    "description": "Step-by-step guide generation API with progressive disclosure and adaptive guide generation. This API enables conversion of natural language instructions into structured, actionable guides that reveal steps progressively to avoid overwhelming users.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "VisGuiAI Team"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000",
+      "description": "Local development server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "instruction-guides",
+      "description": "API endpoints for instruction-based guide generation and progressive step management"
+    },
+    {
+      "name": "progress",
+      "description": "API endpoints for progress tracking and analytics"
+    },
+    {
+      "name": "steps",
+      "description": "API endpoints for step management and completion"
+    }
+  ],
+  "paths": {
+    "/api/v1/instruction-guides/generate": {
+      "post": {
+        "summary": "Generate step-by-step guide from natural language instruction",
+        "description": "This endpoint uses an LLM to convert natural language instructions into structured, actionable step-by-step guides. The guide uses progressive disclosure - only the first step is returned to avoid overwhelming users.",
+        "operationId": "generate_instruction_guide",
+        "tags": ["instruction-guides"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstructionGuideRequest"
+              },
+              "example": {
+                "instruction": "deploy a React app to Vercel",
+                "difficulty": "beginner",
+                "format_preference": "detailed"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Guide generated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstructionGuideGenerationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "security": [{"BearerAuth": []}]
+      }
+    },
+    "/api/v1/instruction-guides/{session_id}/complete-step": {
+      "post": {
+        "summary": "Complete current step and advance to next",
+        "description": "Mark current step as completed and advance to the next step. This endpoint implements progressive disclosure by advancing the user through the guide one step at a time.",
+        "operationId": "complete_current_step",
+        "tags": ["instruction-guides"],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SessionId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StepCompletionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Step completed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentStepResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [{"BearerAuth": []}]
+      }
+    },
+    "/api/v1/instruction-guides/{session_id}/report-impossible-step": {
+      "post": {
+        "summary": "Report impossible step and generate alternative approaches",
+        "description": "Report that current step is impossible and request alternative approaches. This enables adaptive guide generation when users encounter blockers.",
+        "operationId": "report_impossible_step",
+        "tags": ["instruction-guides"],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SessionId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StepCompletionRequest"
+              },
+              "example": {
+                "completion_notes": "The 'Deploy' button doesn't exist in the UI anymore",
+                "encountered_issues": "I see 'New Deployment' and 'Import Project' buttons instead"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Alternative steps generated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdaptationResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "security": [{"BearerAuth": []}]
+      }
+    },
+    "/api/v1/progress/{session_id}": {
+      "get": {
+        "summary": "Get current progress for a guide session",
+        "description": "Returns comprehensive progress tracking including completion percentage, time estimates, and step counts.",
+        "operationId": "get_progress",
+        "tags": ["progress"],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SessionId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Progress information retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProgressResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [{"BearerAuth": []}]
+      }
+    },
+    "/api/v1/progress/{session_id}/estimates": {
+      "get": {
+        "summary": "Get time estimates based on actual completion times",
+        "description": "Calculate updated time estimates based on actual completion times. Analyzes the user's actual completion times for steps and provides more accurate estimates for remaining time.",
+        "operationId": "get_time_estimates",
+        "tags": ["progress"],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SessionId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Time estimates calculated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeEstimates"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [{"BearerAuth": []}]
+      }
+    },
+    "/api/v1/steps/{step_id}/complete": {
+      "post": {
+        "summary": "Complete a step manually or via desktop monitoring",
+        "description": "Complete a step using either manual confirmation or desktop monitoring.",
+        "operationId": "complete_step",
+        "tags": ["steps"],
+        "parameters": [
+          {
+            "name": "step_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StepCompletionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Step completed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StepResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [{"BearerAuth": []}]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT token authentication. Include the token in the Authorization header as: Bearer <token>"
+      }
+    },
+    "parameters": {
+      "SessionId": {
+        "name": "session_id",
+        "in": "path",
+        "required": true,
+        "description": "UUID of the guide session",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    },
+    "schemas": {
+      "InstructionGuideRequest": {
+        "type": "object",
+        "required": ["instruction"],
+        "properties": {
+          "instruction": {
+            "type": "string",
+            "description": "Natural language description of the task"
+          },
+          "difficulty": {
+            "type": "string",
+            "enum": ["beginner", "intermediate", "advanced"],
+            "default": "beginner",
+            "description": "User's skill level"
+          },
+          "format_preference": {
+            "type": "string",
+            "default": "detailed",
+            "description": "Level of detail desired (detailed, concise)"
+          }
+        }
+      },
+      "StepCompletionRequest": {
+        "type": "object",
+        "properties": {
+          "completion_notes": {
+            "type": "string",
+            "nullable": true,
+            "description": "Optional notes about step completion"
+          },
+          "encountered_issues": {
+            "type": "string",
+            "nullable": true,
+            "description": "Any issues encountered during step"
+          },
+          "time_taken_minutes": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Actual time taken to complete the step"
+          }
+        }
+      },
+      "InstructionGuideGenerationResponse": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "guide_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "guide_title": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "first_step": {
+            "type": "object"
+          }
+        }
+      },
+      "CurrentStepResponse": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          },
+          "current_step": {
+            "type": "object"
+          },
+          "progress": {
+            "type": "object"
+          }
+        }
+      },
+      "AdaptationResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "blocked_step": {
+            "type": "object"
+          },
+          "alternative_steps": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "current_step": {
+            "type": "object"
+          }
+        }
+      },
+      "ProgressResponse": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "total_steps": {
+            "type": "integer"
+          },
+          "completed_steps": {
+            "type": "integer"
+          },
+          "current_step_index": {
+            "type": "integer"
+          },
+          "completion_percentage": {
+            "type": "number",
+            "format": "float"
+          },
+          "estimated_time_remaining_minutes": {
+            "type": "integer"
+          }
+        }
+      },
+      "TimeEstimates": {
+        "type": "object",
+        "properties": {
+          "estimated_total_minutes": {
+            "type": "number"
+          },
+          "estimated_remaining_minutes": {
+            "type": "number"
+          },
+          "average_step_duration_minutes": {
+            "type": "number"
+          },
+          "time_elapsed_minutes": {
+            "type": "number"
+          }
+        }
+      },
+      "StepResponse": {
+        "type": "object",
+        "properties": {
+          "step_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "step_index": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "in_progress", "completed", "blocked", "skipped"]
+          }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Invalid request parameters",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "detail": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Access denied to this resource",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "detail": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource not found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "detail": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "InternalServerError": {
+        "description": "Internal server error",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "detail": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

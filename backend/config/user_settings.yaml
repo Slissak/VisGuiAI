@@ -1,0 +1,289 @@
+# User Settings and Quota Configuration
+# This file defines user limits, quotas, and usage policies for the VisGuiAI platform
+
+version: "1.0"
+last_updated: "2025-10-29"
+
+# ============================================================================
+# USER TIERS - Define different usage levels
+# ============================================================================
+
+user_tiers:
+  # Free tier for trial/testing users
+  free:
+    name: "Free Tier"
+    description: "Limited usage for trial and testing"
+
+    # Daily limits
+    max_guides_per_day: 3
+    max_steps_per_day: 50
+    max_adaptations_per_guide: 2
+
+    # Token limits (LLM usage)
+    max_tokens_per_day: 10000          # ~10k tokens per day
+    max_tokens_per_guide: 5000         # ~5k tokens per guide generation
+    max_tokens_per_month: 100000       # ~100k tokens per month
+
+    # Rate limiting
+    requests_per_minute: 10
+    requests_per_hour: 100
+
+    # Feature access
+    features:
+      guide_generation: true
+      step_adaptation: true
+      guide_history: true
+      export_guides: false
+      api_access: false
+      priority_support: false
+
+    # Restrictions
+    max_concurrent_sessions: 1
+    session_timeout_minutes: 60
+
+  # Basic paid tier
+  basic:
+    name: "Basic Tier"
+    description: "For individual users with regular usage"
+
+    # Daily limits
+    max_guides_per_day: 20
+    max_steps_per_day: 500
+    max_adaptations_per_guide: 5
+
+    # Token limits
+    max_tokens_per_day: 50000          # ~50k tokens per day
+    max_tokens_per_guide: 10000        # ~10k tokens per guide
+    max_tokens_per_month: 1000000      # ~1M tokens per month
+
+    # Rate limiting
+    requests_per_minute: 30
+    requests_per_hour: 500
+
+    # Feature access
+    features:
+      guide_generation: true
+      step_adaptation: true
+      guide_history: true
+      export_guides: true
+      api_access: false
+      priority_support: false
+
+    # Restrictions
+    max_concurrent_sessions: 3
+    session_timeout_minutes: 120
+
+  # Professional tier
+  professional:
+    name: "Professional Tier"
+    description: "For power users and small teams"
+
+    # Daily limits
+    max_guides_per_day: 100
+    max_steps_per_day: 2000
+    max_adaptations_per_guide: 10
+
+    # Token limits
+    max_tokens_per_day: 200000         # ~200k tokens per day
+    max_tokens_per_guide: 20000        # ~20k tokens per guide
+    max_tokens_per_month: 5000000      # ~5M tokens per month
+
+    # Rate limiting
+    requests_per_minute: 60
+    requests_per_hour: 2000
+
+    # Feature access
+    features:
+      guide_generation: true
+      step_adaptation: true
+      guide_history: true
+      export_guides: true
+      api_access: true
+      priority_support: true
+
+    # Restrictions
+    max_concurrent_sessions: 10
+    session_timeout_minutes: 240
+
+  # Enterprise tier
+  enterprise:
+    name: "Enterprise Tier"
+    description: "For organizations with high volume usage"
+
+    # Daily limits (high/unlimited)
+    max_guides_per_day: -1             # -1 = unlimited
+    max_steps_per_day: -1
+    max_adaptations_per_guide: -1
+
+    # Token limits
+    max_tokens_per_day: 1000000        # ~1M tokens per day
+    max_tokens_per_guide: 50000        # ~50k tokens per guide
+    max_tokens_per_month: 20000000     # ~20M tokens per month
+
+    # Rate limiting (generous)
+    requests_per_minute: 300
+    requests_per_hour: 10000
+
+    # Feature access (all features)
+    features:
+      guide_generation: true
+      step_adaptation: true
+      guide_history: true
+      export_guides: true
+      api_access: true
+      priority_support: true
+
+    # Restrictions (minimal)
+    max_concurrent_sessions: 50
+    session_timeout_minutes: 480
+
+# ============================================================================
+# DEFAULT SETTINGS - Applied when user tier not specified
+# ============================================================================
+
+default_tier: "free"
+
+# ============================================================================
+# TOKEN COST CALCULATION - Approximate token costs per operation
+# ============================================================================
+
+token_costs:
+  # Guide generation costs
+  guide_generation_base: 2000          # Base tokens for guide structure
+  guide_generation_per_section: 500   # Additional tokens per section
+  guide_generation_per_step: 100      # Additional tokens per step
+
+  # Adaptation costs
+  adaptation_analysis: 1000            # Analyzing why step is impossible
+  adaptation_per_alternative: 300     # Generating each alternative step
+
+  # Progress tracking (minimal)
+  step_completion: 10
+  progress_update: 5
+
+# ============================================================================
+# QUOTA RESET POLICIES
+# ============================================================================
+
+quota_reset:
+  daily_reset_time_utc: "00:00"       # Reset daily quotas at midnight UTC
+  monthly_reset_day: 1                 # Reset monthly quotas on 1st of month
+
+  # Grace period after quota exceeded
+  soft_limit_grace_percentage: 10     # Allow 10% over limit before hard stop
+
+  # Warnings
+  warning_thresholds:
+    - 50   # Warn at 50% usage
+    - 75   # Warn at 75% usage
+    - 90   # Warn at 90% usage
+
+# ============================================================================
+# ABUSE PREVENTION
+# ============================================================================
+
+abuse_prevention:
+  # Detect and prevent abuse patterns
+  max_failed_requests_per_hour: 50
+  max_empty_guides_per_day: 10        # Guides with no steps completed
+  max_rapid_guide_creations: 5        # Max guides created within 5 minutes
+
+  # Automatic throttling
+  enable_auto_throttle: true
+  throttle_cooldown_minutes: 30
+
+  # Blocking policies
+  auto_block_threshold: 100           # Auto-block after X violations
+  block_duration_hours: 24
+
+# ============================================================================
+# COST TRACKING
+# ============================================================================
+
+cost_tracking:
+  # Enable detailed cost tracking per user
+  enable_cost_tracking: true
+
+  # Cost per 1000 tokens (USD) - adjust based on your LLM provider
+  cost_per_1k_tokens:
+    gpt_4: 0.03                        # GPT-4 input cost
+    gpt_4_output: 0.06                 # GPT-4 output cost
+    gpt_3_5_turbo: 0.0015              # GPT-3.5 Turbo input cost
+    gpt_3_5_turbo_output: 0.002        # GPT-3.5 Turbo output cost
+
+  # Billing alerts
+  alert_thresholds_usd:
+    - 10.00    # Alert at $10
+    - 50.00    # Alert at $50
+    - 100.00   # Alert at $100
+
+# ============================================================================
+# BACKEND CONFIGURATION
+# ============================================================================
+
+backend:
+  # Quota enforcement
+  enforce_quotas: true
+  enforce_rate_limits: true
+
+  # Database storage
+  store_usage_history: true
+  usage_history_retention_days: 90
+
+  # Caching
+  cache_user_quotas_seconds: 300      # Cache quota status for 5 minutes
+
+  # Response headers
+  include_usage_in_response_headers: true
+  usage_headers:
+    - "X-RateLimit-Limit"
+    - "X-RateLimit-Remaining"
+    - "X-RateLimit-Reset"
+    - "X-Token-Limit"
+    - "X-Token-Used"
+    - "X-Token-Remaining"
+
+# ============================================================================
+# FRONTEND CONFIGURATION
+# ============================================================================
+
+frontend:
+  # Display usage information
+  show_usage_dashboard: true
+  show_quota_warnings: true
+
+  # Warning display
+  warning_banner_threshold: 80        # Show banner at 80% usage
+
+  # Upgrade prompts
+  show_upgrade_prompt: true
+  upgrade_prompt_threshold: 90        # Show upgrade prompt at 90% usage
+
+# ============================================================================
+# NOTIFICATIONS
+# ============================================================================
+
+notifications:
+  # Email notifications
+  email_on_quota_warning: true
+  email_on_quota_exceeded: true
+  email_on_monthly_summary: true
+
+  # In-app notifications
+  in_app_on_quota_warning: true
+  in_app_on_rate_limit: true
+
+# ============================================================================
+# ADMIN OVERRIDES
+# ============================================================================
+
+admin_overrides:
+  # Allow admins to bypass limits for specific users
+  allow_quota_overrides: true
+  allow_temporary_tier_upgrades: true
+
+  # Whitelist (users that bypass all limits)
+  whitelisted_user_ids: []
+
+  # Blacklist (blocked users)
+  blacklisted_user_ids: []
