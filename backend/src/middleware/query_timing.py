@@ -4,7 +4,8 @@ This middleware tracks request timing and logs slow queries for performance anal
 """
 
 import time
-from typing import Callable
+from collections.abc import Callable
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
@@ -71,7 +72,7 @@ class QueryTimingMiddleware(BaseHTTPMiddleware):
                 duration_ms=f"{duration_ms:.2f}",
                 duration_seconds=f"{duration_seconds:.4f}",
                 threshold_ms=self.slow_query_threshold_ms,
-                status_code=response.status_code
+                status_code=response.status_code,
             )
         else:
             # Log normal requests at debug level
@@ -80,7 +81,7 @@ class QueryTimingMiddleware(BaseHTTPMiddleware):
                 method=request.method,
                 path=request.url.path,
                 duration_ms=f"{duration_ms:.2f}",
-                status_code=response.status_code
+                status_code=response.status_code,
             )
 
         return response
@@ -125,14 +126,14 @@ class DatabaseQueryTimer:
                 query_name=self.query_name,
                 duration_ms=f"{duration_ms:.2f}",
                 duration_seconds=f"{self.duration_seconds:.4f}",
-                threshold_ms=self.slow_threshold_ms
+                threshold_ms=self.slow_threshold_ms,
             )
         else:
             # Log normal queries at debug level
             logger.debug(
                 "query_completed",
                 query_name=self.query_name,
-                duration_ms=f"{duration_ms:.2f}"
+                duration_ms=f"{duration_ms:.2f}",
             )
 
         return False  # Don't suppress exceptions

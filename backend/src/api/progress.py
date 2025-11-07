@@ -1,20 +1,21 @@
 """API routes for progress tracking."""
 
 import uuid
-from typing import Dict, Any
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from shared.schemas.api_responses import ProgressResponse
 from shared.schemas.progress_tracker import ProgressUpdate
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..auth.middleware import get_current_user
 from ..core.database import get_db
 from ..services.progress_service import (
-    ProgressService, get_progress_service, ProgressNotFoundError
+    ProgressNotFoundError,
+    ProgressService,
+    get_progress_service,
 )
 from ..services.session_service import SessionService, get_session_service
-from ..auth.middleware import get_current_user
 
 router = APIRouter(prefix="/api/v1/progress", tags=["progress"])
 
@@ -35,22 +36,22 @@ router = APIRouter(prefix="/api/v1/progress", tags=["progress"])
                         "completion_percentage": 41.67,
                         "estimated_time_remaining_minutes": 35,
                         "time_elapsed_minutes": 25,
-                        "last_updated": "2025-10-26T10:30:00Z"
+                        "last_updated": "2025-10-26T10:30:00Z",
                     }
                 }
-            }
+            },
         },
         404: {"description": "Session or progress not found"},
-        403: {"description": "Access denied to this session"}
+        403: {"description": "Access denied to this session"},
     },
-    summary="Get current progress for a guide session"
+    summary="Get current progress for a guide session",
 )
 async def get_progress(
     session_id: uuid.UUID,
     current_user: str = Depends(get_current_user),
     progress_service: ProgressService = Depends(get_progress_service),
     session_service: SessionService = Depends(get_session_service),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get current progress information for a guide session.
@@ -88,13 +89,13 @@ async def get_progress(
         if not session_detail:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Session {session_id} not found"
+                detail=f"Session {session_id} not found",
             )
 
         if session_detail.session.user_id != current_user:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied to this session"
+                detail="Access denied to this session",
             )
 
         progress = await progress_service.get_progress(session_id, db)
@@ -102,20 +103,17 @@ async def get_progress(
         if not progress:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Progress tracker for session {session_id} not found"
+                detail=f"Progress tracker for session {session_id} not found",
             )
 
         return progress
 
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get progress: {str(e)}"
+            detail=f"Failed to get progress: {str(e)}",
         )
 
 
@@ -133,16 +131,16 @@ async def get_progress(
                         "completed_steps": 6,
                         "current_step_index": 6,
                         "completion_percentage": 50.0,
-                        "estimated_time_remaining_minutes": 30
+                        "estimated_time_remaining_minutes": 30,
                     }
                 }
-            }
+            },
         },
         404: {"description": "Session or progress not found"},
         403: {"description": "Access denied to this session"},
-        400: {"description": "Invalid update data"}
+        400: {"description": "Invalid update data"},
     },
-    summary="Update progress tracker with new data"
+    summary="Update progress tracker with new data",
 )
 async def update_progress(
     session_id: uuid.UUID,
@@ -150,7 +148,7 @@ async def update_progress(
     current_user: str = Depends(get_current_user),
     progress_service: ProgressService = Depends(get_progress_service),
     session_service: SessionService = Depends(get_session_service),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Update progress tracker with new completion data.
@@ -186,38 +184,32 @@ async def update_progress(
         if not session_detail:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Session {session_id} not found"
+                detail=f"Session {session_id} not found",
             )
 
         if session_detail.session.user_id != current_user:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied to this session"
+                detail="Access denied to this session",
             )
 
         progress = await progress_service.update_progress(session_id, update, db)
         return progress
 
     except ProgressNotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update progress: {str(e)}"
+            detail=f"Failed to update progress: {str(e)}",
         )
 
 
 @router.get(
     "/{session_id}/estimates",
-    response_model=Dict[str, float],
+    response_model=dict[str, float],
     responses={
         200: {
             "description": "Time estimates calculated successfully",
@@ -227,22 +219,22 @@ async def update_progress(
                         "estimated_total_minutes": 60,
                         "estimated_remaining_minutes": 35,
                         "average_step_duration_minutes": 5.2,
-                        "time_elapsed_minutes": 25
+                        "time_elapsed_minutes": 25,
                     }
                 }
-            }
+            },
         },
         404: {"description": "Session or progress not found"},
-        403: {"description": "Access denied to this session"}
+        403: {"description": "Access denied to this session"},
     },
-    summary="Get time estimates based on actual completion times"
+    summary="Get time estimates based on actual completion times",
 )
 async def get_time_estimates(
     session_id: uuid.UUID,
     current_user: str = Depends(get_current_user),
     progress_service: ProgressService = Depends(get_progress_service),
     session_service: SessionService = Depends(get_session_service),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Calculate updated time estimates based on actual completion times.
@@ -274,38 +266,32 @@ async def get_time_estimates(
         if not session_detail:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Session {session_id} not found"
+                detail=f"Session {session_id} not found",
             )
 
         if session_detail.session.user_id != current_user:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied to this session"
+                detail="Access denied to this session",
             )
 
         estimates = await progress_service.calculate_time_estimates(session_id, db)
         return estimates
 
     except ProgressNotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to calculate time estimates: {str(e)}"
+            detail=f"Failed to calculate time estimates: {str(e)}",
         )
 
 
 @router.get(
     "/{session_id}/analytics",
-    response_model=Dict[str, Any],
+    response_model=dict[str, Any],
     responses={
         200: {
             "description": "Session analytics retrieved successfully",
@@ -321,22 +307,22 @@ async def get_time_estimates(
                         "slowest_step_minutes": 12,
                         "completion_rate": 0.42,
                         "started_at": "2025-10-26T09:00:00Z",
-                        "last_activity_at": "2025-10-26T10:30:00Z"
+                        "last_activity_at": "2025-10-26T10:30:00Z",
                     }
                 }
-            }
+            },
         },
         404: {"description": "Session or progress not found"},
-        403: {"description": "Access denied to this session"}
+        403: {"description": "Access denied to this session"},
     },
-    summary="Get detailed analytics for a session"
+    summary="Get detailed analytics for a session",
 )
 async def get_session_analytics(
     session_id: uuid.UUID,
     current_user: str = Depends(get_current_user),
     progress_service: ProgressService = Depends(get_progress_service),
     session_service: SessionService = Depends(get_session_service),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get detailed analytics and insights for a guide session.
@@ -374,30 +360,24 @@ async def get_session_analytics(
         if not session_detail:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Session {session_id} not found"
+                detail=f"Session {session_id} not found",
             )
 
         if session_detail.session.user_id != current_user:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied to this session"
+                detail="Access denied to this session",
             )
 
         analytics = await progress_service.get_session_analytics(session_id, db)
         return analytics
 
     except ProgressNotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get session analytics: {str(e)}"
+            detail=f"Failed to get session analytics: {str(e)}",
         )

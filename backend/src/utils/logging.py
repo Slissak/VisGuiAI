@@ -5,8 +5,8 @@ It supports both development (pretty console output) and production (JSON) forma
 """
 
 import logging
+
 import structlog
-from datetime import datetime
 
 
 def setup_logging(environment: str = "development"):

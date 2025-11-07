@@ -1,18 +1,16 @@
 """User model for authentication and tier management."""
 
-import uuid
-from datetime import datetime
-from sqlalchemy import Column, String, DateTime, Boolean, Enum
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
 import enum
+
+from sqlalchemy import Boolean, Column, DateTime, String
+from sqlalchemy.sql import func
 
 from .database import Base
 
 
 class UserTier(str, enum.Enum):
     """User tier levels for quota management."""
+
     FREE = "free"
     BASIC = "basic"
     PROFESSIONAL = "professional"
@@ -21,6 +19,7 @@ class UserTier(str, enum.Enum):
 
 class UserModel(Base):
     """User model for authentication and authorization."""
+
     __tablename__ = "users"
 
     user_id = Column(String(255), primary_key=True, index=True)
@@ -37,8 +36,15 @@ class UserModel(Base):
     is_admin = Column(Boolean, nullable=False, default=False)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
     last_login_at = Column(DateTime(timezone=True), nullable=True)
 
     # Email verification

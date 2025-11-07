@@ -2,8 +2,10 @@
 Configuration Loader
 Centralized loader for YAML configuration files (pricing, user settings, etc.)
 """
+
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
+
 import yaml
 
 from src.utils.logging import get_logger
@@ -25,7 +27,7 @@ class ConfigLoader:
         self._cache = {}
         logger.info(f"ConfigLoader initialized with config_dir: {self.config_dir}")
 
-    def _load_yaml(self, filename: str) -> Dict[str, Any]:
+    def _load_yaml(self, filename: str) -> dict[str, Any]:
         """Load a YAML file from config directory with caching."""
         if filename in self._cache:
             return self._cache[filename]
@@ -36,7 +38,7 @@ class ConfigLoader:
             return {}
 
         try:
-            with open(file_path, "r") as f:
+            with open(file_path) as f:
                 data = yaml.safe_load(f)
                 self._cache[filename] = data
                 logger.info(f"Loaded config: {filename}")
@@ -51,13 +53,13 @@ class ConfigLoader:
         logger.info("Config cache cleared")
 
     # ===== PRICING =====
-    def get_pricing_data(self) -> Dict[str, Any]:
+    def get_pricing_data(self) -> dict[str, Any]:
         """Get model pricing data."""
         data = self._load_yaml("pricing.yaml")
         return data.get("models", {})
 
     # ===== USER SETTINGS =====
-    def get_user_settings(self) -> Dict[str, Any]:
+    def get_user_settings(self) -> dict[str, Any]:
         """Get user tier and quota settings."""
         return self._load_yaml("user_settings.yaml")
 

@@ -3,35 +3,35 @@
 This is the main entry point for the backend service.
 """
 
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 from datetime import datetime
 
-from fastapi import FastAPI, Request, Depends
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .core.config import get_settings
-from .core.database import init_database, close_database, get_db, db_manager
-from .core.redis import init_redis, close_redis, redis_manager
-from .core.cache import init_cache, close_cache, cache_manager
-from .services.llm_service import init_llm_service
-from .utils.logging import setup_logging, get_logger
-from .exceptions import GuideException
-from .middleware import QueryTimingMiddleware, RateLimitMiddleware
-from .auth.middleware import UserPopulationMiddleware
+from .api.admin import router as admin_router
+from .api.auth import router as auth_router
 
 # Import API routers
 from .api.guides import router as guides_router
+from .api.instruction_guides import router as instruction_guides_router
+from .api.progress import router as progress_router
 from .api.sessions import router as sessions_router
 from .api.steps import router as steps_router
-from .api.progress import router as progress_router
-from .api.instruction_guides import router as instruction_guides_router
-from .api.auth import router as auth_router
-from .api.admin import router as admin_router
+from .auth.middleware import UserPopulationMiddleware
+from .core.cache import cache_manager, close_cache, init_cache
+from .core.config import get_settings
+from .core.database import close_database, db_manager, get_db, init_database
+from .core.redis import close_redis, init_redis, redis_manager
+from .exceptions import GuideException
+from .middleware import QueryTimingMiddleware, RateLimitMiddleware
+from .services.llm_service import init_llm_service
+from .utils.logging import get_logger, setup_logging
 
 
 @asynccontextmanager
@@ -46,9 +46,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Startup
     try:
         logger.info(
-            "starting_backend",
-            environment=settings.environment,
-            debug=settings.debug
+            "starting_backend", environment=settings.environment, debug=settings.debug
         )
         await init_database()
         await init_redis()
@@ -57,14 +55,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.info(
             "backend_started",
             environment=settings.environment,
-            message="Step Guide Backend started successfully"
+            message="Step Guide Backend started successfully",
         )
     except Exception as e:
-        logger.error(
-            "startup_failed",
-            error=str(e),
-            error_type=type(e).__name__
-        )
+        logger.error("startup_failed", error=str(e), error_type=type(e).__name__)
         raise
 
     yield
@@ -77,11 +71,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await close_redis()
         logger.info("backend_shutdown_complete")
     except Exception as e:
-        logger.error(
-            "shutdown_failed",
-            error=str(e),
-            error_type=type(e).__name__
-        )
+        logger.error("shutdown_failed", error=str(e), error_type=type(e).__name__)
 
 
 # Create FastAPI application
@@ -92,7 +82,7 @@ app = FastAPI(
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
-    openapi_url="/openapi.json"
+    openapi_url="/openapi.json",
 )
 
 # Get settings
@@ -107,7 +97,7 @@ app.add_middleware(RateLimitMiddleware)
 # Query timing middleware (add after rate limiter to capture total request time)
 app.add_middleware(
     QueryTimingMiddleware,
-    slow_query_threshold_ms=100.0  # Log queries taking more than 100ms
+    slow_query_threshold_ms=100.0,  # Log queries taking more than 100ms
 )
 
 # GZip compression middleware
@@ -115,7 +105,7 @@ app.add_middleware(
 app.add_middleware(
     GZipMiddleware,
     minimum_size=1000,  # Only compress responses larger than 1KB
-    compresslevel=6     # Balanced compression (1=fast/less compression, 9=slow/more compression)
+    compresslevel=6,  # Balanced compression (1=fast/less compression, 9=slow/more compression)
 )
 
 # CORS middleware
@@ -129,7 +119,9 @@ app.add_middleware(
 
 
 @app.exception_handler(GuideException)
-async def guide_exception_handler(request: Request, exc: GuideException) -> JSONResponse:
+async def guide_exception_handler(
+    request: Request, exc: GuideException
+) -> JSONResponse:
     """Exception handler for custom GuideException and its subclasses.
 
     Returns structured error responses with error codes, messages, and details.
@@ -140,8 +132,8 @@ async def guide_exception_handler(request: Request, exc: GuideException) -> JSON
             "error": exc.code,
             "message": exc.message,
             "details": exc.details,
-            "timestamp": datetime.utcnow().isoformat() + "Z"
-        }
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+        },
     )
 
 
@@ -153,7 +145,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
         "unhandled_exception",
         error=str(exc),
         error_type=type(exc).__name__,
-        path=request.url.path
+        path=request.url.path,
     )
 
     return JSONResponse(
@@ -163,8 +155,8 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
             "message": "An internal server error occurred",
             "details": {"type": type(exc).__name__} if settings.debug else {},
             "timestamp": datetime.utcnow().isoformat() + "Z",
-            "request_id": getattr(request.state, "request_id", None)
-        }
+            "request_id": getattr(request.state, "request_id", None),
+        },
     )
 
 
@@ -198,14 +190,14 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         # Get database pool status
         db_pool_info = db_manager.get_pool_status()
 
-        logger.debug("health_check_database", status=database_status, pool_info=db_pool_info)
+        logger.debug(
+            "health_check_database", status=database_status, pool_info=db_pool_info
+        )
     except Exception as e:
         database_status = "error"
         overall_status = "unhealthy"
         logger.error(
-            "health_check_database_failed",
-            error=str(e),
-            error_type=type(e).__name__
+            "health_check_database_failed", error=str(e), error_type=type(e).__name__
         )
         if settings.debug:
             db_pool_info = {"error": str(e)}
@@ -219,14 +211,14 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         if redis_status != "healthy":
             overall_status = "degraded"
 
-        logger.debug("health_check_redis", status=redis_status, pool_info=redis_pool_info)
+        logger.debug(
+            "health_check_redis", status=redis_status, pool_info=redis_pool_info
+        )
     except Exception as e:
         redis_status = "error"
         overall_status = "degraded"
         logger.error(
-            "health_check_redis_failed",
-            error=str(e),
-            error_type=type(e).__name__
+            "health_check_redis_failed", error=str(e), error_type=type(e).__name__
         )
         if settings.debug:
             redis_pool_info = {"error": str(e)}
@@ -239,18 +231,10 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         "timestamp": datetime.utcnow().isoformat() + "Z",
         "version": "1.0.0",
         "services": {
-            "database": {
-                "status": database_status,
-                "pool": db_pool_info
-            },
-            "redis": {
-                "status": redis_status,
-                "pool": redis_pool_info
-            },
-            "cache": {
-                "status": cache_status
-            }
-        }
+            "database": {"status": database_status, "pool": db_pool_info},
+            "redis": {"status": redis_status, "pool": redis_pool_info},
+            "cache": {"status": cache_status},
+        },
     }
 
     # Return appropriate HTTP status code
@@ -269,5 +253,5 @@ async def root():
     return {
         "message": "Step Guide Management System API",
         "version": "1.0.0",
-        "docs_url": "/docs"
+        "docs_url": "/docs",
     }

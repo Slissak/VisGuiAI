@@ -1,9 +1,10 @@
 """Service for managing user token usage and limits."""
 
+from datetime import datetime
+from uuid import UUID
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from uuid import UUID
-from datetime import datetime
 
 from src.shared.db.models.usage import UserUsage
 
@@ -29,7 +30,9 @@ class UsageService:
 
         return usage
 
-    async def check_limits(self, user_id: UUID, daily_budget: float, monthly_budget: float) -> tuple[bool, str]:
+    async def check_limits(
+        self, user_id: UUID, daily_budget: float, monthly_budget: float
+    ) -> tuple[bool, str]:
         """
         Check if a user has exceeded their daily or monthly budget.
 
@@ -50,13 +53,19 @@ class UsageService:
         if usage.daily_cost >= daily_budget:
             usage.daily_budget_exceeded = True
             await self.db.commit()
-            return False, f"Daily budget exceeded ({usage.daily_cost:.4f} / {daily_budget:.4f})"
+            return (
+                False,
+                f"Daily budget exceeded ({usage.daily_cost:.4f} / {daily_budget:.4f})",
+            )
 
         # Check monthly limit
         if usage.monthly_cost >= monthly_budget:
             usage.monthly_budget_exceeded = True
             await self.db.commit()
-            return False, f"Monthly budget exceeded ({usage.monthly_cost:.4f} / {monthly_budget:.4f})"
+            return (
+                False,
+                f"Monthly budget exceeded ({usage.monthly_cost:.4f} / {monthly_budget:.4f})",
+            )
 
         return True, ""
 
@@ -114,7 +123,10 @@ class UsageService:
             needs_commit = True
 
         # Reset monthly if month/year has passed
-        if now.month > usage.monthly_reset_date.month or now.year > usage.monthly_reset_date.year:
+        if (
+            now.month > usage.monthly_reset_date.month
+            or now.year > usage.monthly_reset_date.year
+        ):
             usage.monthly_cost = 0.0
             usage.monthly_requests = 0
             usage.monthly_budget_exceeded = False

@@ -1,13 +1,13 @@
 """Database connection and session management."""
 
-import os
-from typing import AsyncGenerator, Dict, Any
+from collections.abc import AsyncGenerator
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool, QueuePool
 
-from .config import get_settings
 from ..utils.logging import get_logger
+from .config import get_settings
 
 
 class DatabaseManager:
@@ -33,18 +33,22 @@ class DatabaseManager:
         # Use NullPool for testing to avoid connection issues
         if self.settings.environment == "test":
             engine_kwargs["poolclass"] = NullPool
-            self.logger.info("database_pool_config", pool_type="NullPool", environment="test")
+            self.logger.info(
+                "database_pool_config", pool_type="NullPool", environment="test"
+            )
         else:
             # Production connection pool settings
-            engine_kwargs.update({
-                "poolclass": QueuePool,
-                "pool_size": 20,  # Number of connections to maintain in the pool
-                "max_overflow": 10,  # Additional connections allowed beyond pool_size
-                "pool_pre_ping": True,  # Validate connections before using them
-                "pool_recycle": 3600,  # Recycle connections after 1 hour (3600 seconds)
-                "pool_timeout": 30,  # Timeout for getting a connection from the pool
-                "echo_pool": self.settings.debug,  # Log pool checkouts/checkins in debug mode
-            })
+            engine_kwargs.update(
+                {
+                    "poolclass": QueuePool,
+                    "pool_size": 20,  # Number of connections to maintain in the pool
+                    "max_overflow": 10,  # Additional connections allowed beyond pool_size
+                    "pool_pre_ping": True,  # Validate connections before using them
+                    "pool_recycle": 3600,  # Recycle connections after 1 hour (3600 seconds)
+                    "pool_timeout": 30,  # Timeout for getting a connection from the pool
+                    "echo_pool": self.settings.debug,  # Log pool checkouts/checkins in debug mode
+                }
+            )
             self.logger.info(
                 "database_pool_config",
                 pool_type="QueuePool",
@@ -53,7 +57,7 @@ class DatabaseManager:
                 pool_pre_ping=True,
                 pool_recycle=3600,
                 pool_timeout=30,
-                environment=self.settings.environment
+                environment=self.settings.environment,
             )
 
         self.engine = create_async_engine(database_url, **engine_kwargs)
@@ -63,7 +67,10 @@ class DatabaseManager:
             expire_on_commit=False,
         )
 
-        self.logger.info("database_initialized", message="Database engine and session maker initialized")
+        self.logger.info(
+            "database_initialized",
+            message="Database engine and session maker initialized",
+        )
 
     async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
         """Get database session."""
@@ -88,7 +95,7 @@ class DatabaseManager:
                             pool_size=pool_size,
                             overflow=overflow,
                             max_overflow=max_overflow,
-                            message="Connection pool is exhausted. Consider increasing pool size or max_overflow."
+                            message="Connection pool is exhausted. Consider increasing pool size or max_overflow.",
                         )
                     # Warn if pool is near capacity (80% of max connections)
                     elif checked_out > ((pool_size + max_overflow) * 0.8):
@@ -97,15 +104,17 @@ class DatabaseManager:
                             checked_out=checked_out,
                             pool_size=pool_size,
                             overflow=overflow,
-                            capacity_percentage=round((checked_out / (pool_size + max_overflow)) * 100, 2),
-                            message="Connection pool is near capacity."
+                            capacity_percentage=round(
+                                (checked_out / (pool_size + max_overflow)) * 100, 2
+                            ),
+                            message="Connection pool is near capacity.",
                         )
             except Exception as e:
                 # Don't fail session creation if pool monitoring fails
                 self.logger.debug(
                     "pool_monitoring_error",
                     error=str(e),
-                    message="Failed to check pool status, continuing with session creation"
+                    message="Failed to check pool status, continuing with session creation",
                 )
 
         async with self.session_maker() as session:
@@ -122,7 +131,7 @@ class DatabaseManager:
         if self.engine:
             await self.engine.dispose()
 
-    def get_pool_status(self) -> Dict[str, Any]:
+    def get_pool_status(self) -> dict[str, Any]:
         """Get current connection pool status and metrics.
 
         Returns:
@@ -140,7 +149,7 @@ class DatabaseManager:
                 "status": "healthy",
                 "pool_type": "NullPool",
                 "environment": self.settings.environment,
-                "note": "NullPool doesn't maintain persistent connections"
+                "note": "NullPool doesn't maintain persistent connections",
             }
 
         # For QueuePool, get detailed statistics
@@ -159,20 +168,16 @@ class DatabaseManager:
                     "recycle": getattr(pool, "_recycle", 3600),
                 },
                 "health": {
-                    "pool_exhausted": pool.overflow() >= getattr(pool, "_max_overflow", 10),
+                    "pool_exhausted": pool.overflow()
+                    >= getattr(pool, "_max_overflow", 10),
                     "near_capacity": pool.checkedout() > (pool.size() * 0.8),
-                }
+                },
             }
         except Exception as e:
             self.logger.error(
-                "pool_status_error",
-                error=str(e),
-                error_type=type(e).__name__
+                "pool_status_error", error=str(e), error_type=type(e).__name__
             )
-            return {
-                "status": "error",
-                "error": str(e)
-            }
+            return {"status": "error", "error": str(e)}
 
 
 # Global database manager instance

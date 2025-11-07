@@ -1,7 +1,7 @@
 import re
-from typing import List, Tuple
 
-def natural_sort_key(identifier: str) -> Tuple[int, str]:
+
+def natural_sort_key(identifier: str) -> tuple[int, str]:
     """
     Convert step identifier to sortable tuple.
 
@@ -19,14 +19,15 @@ def natural_sort_key(identifier: str) -> Tuple[int, str]:
     Returns:
         Tuple of (numeric_part, letter_part) for sorting
     """
-    match = re.match(r'^(\d+)([a-z]?)$', identifier)
+    match = re.match(r"^(\d+)([a-z]?)$", identifier)
     if match:
         num, letter = match.groups()
         return (int(num), letter or "")
     # Fallback for invalid identifiers
     return (999999, identifier)
 
-def sort_step_identifiers(identifiers: List[str]) -> List[str]:
+
+def sort_step_identifiers(identifiers: list[str]) -> list[str]:
     """
     Sort step identifiers in natural order.
 
@@ -42,6 +43,7 @@ def sort_step_identifiers(identifiers: List[str]) -> List[str]:
     """
     return sorted(identifiers, key=natural_sort_key)
 
+
 def is_identifier_before(id1: str, id2: str) -> bool:
     """
     Check if id1 comes before id2 in natural order.
@@ -55,7 +57,8 @@ def is_identifier_before(id1: str, id2: str) -> bool:
     """
     return natural_sort_key(id1) < natural_sort_key(id2)
 
-def get_next_identifier(current: str, all_identifiers: List[str]) -> str | None:
+
+def get_next_identifier(current: str, all_identifiers: list[str]) -> str | None:
     """
     Get the next identifier in sequence.
 
@@ -75,7 +78,8 @@ def get_next_identifier(current: str, all_identifiers: List[str]) -> str | None:
         pass
     return None
 
-def get_previous_identifier(current: str, all_identifiers: List[str]) -> str | None:
+
+def get_previous_identifier(current: str, all_identifiers: list[str]) -> str | None:
     """
     Get the previous identifier in sequence.
 

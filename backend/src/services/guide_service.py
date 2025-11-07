@@ -1,23 +1,28 @@
 """Guide generation service with prompt templates and validation."""
 
 import uuid
-from typing import Dict, Any, Optional
 from datetime import datetime
+from typing import Any
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from shared.schemas.api_responses import GuideGenerationRequest, GuideGenerationResponse
+from shared.schemas.llm_request import LLMProvider
+from shared.schemas.step import Step
+from shared.schemas.step_guide import DifficultyLevel, StepGuide
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from shared.schemas.step_guide import StepGuide, StepGuideCreate, DifficultyLevel
-from shared.schemas.step import Step, StepCreate
-from shared.schemas.llm_request import LLMGenerationRequest, LLMGenerationRequestCreate, LLMProvider
-from shared.schemas.api_responses import GuideGenerationRequest, GuideGenerationResponse
-
-from ..models.database import StepGuideModel, StepModel, SectionModel, LLMGenerationRequestModel, StepStatus
-from ..exceptions import ValidationError, LLMGenerationError
-from .llm_service import LLMService
-from ..utils.logging import get_logger
 from ..core.cache import CacheManager
+from ..exceptions import ValidationError
+from ..models.database import (
+    LLMGenerationRequestModel,
+    SectionModel,
+    StepGuideModel,
+    StepModel,
+    StepStatus,
+)
+from ..utils.logging import get_logger
+from .llm_service import LLMService
 
 logger = get_logger(__name__)
 
@@ -26,11 +31,7 @@ class GuideValidationError(ValidationError):
     """Exception raised when guide validation fails."""
 
     def __init__(self, reason: str):
-        super().__init__(
-            field="guide_data",
-            value="<guide_content>",
-            reason=reason
-        )
+        super().__init__(field="guide_data", value="<guide_content>", reason=reason)
 
 
 class GuideService:
@@ -41,9 +42,7 @@ class GuideService:
         self.cache = cache
 
     async def generate_guide(
-        self,
-        request: GuideGenerationRequest,
-        db: AsyncSession
+        self, request: GuideGenerationRequest, db: AsyncSession
     ) -> GuideGenerationResponse:
         """Generate a new step-by-step guide."""
 
@@ -51,14 +50,16 @@ class GuideService:
             "guide_generation_started",
             user_query=request.user_query,
             difficulty=request.difficulty_preference.value,
-            format_preference=request.format_preference
+            format_preference=request.format_preference,
         )
 
         # Generate guide using LLM service
-        guide_data, provider_used, generation_time = await self.llm_service.generate_guide(
-            user_query=request.user_query,
-            difficulty=request.difficulty_preference.value,
-            format_preference=request.format_preference
+        guide_data, provider_used, generation_time = (
+            await self.llm_service.generate_guide(
+                user_query=request.user_query,
+                difficulty=request.difficulty_preference.value,
+                format_preference=request.format_preference,
+            )
         )
 
         # Extract raw LLM response for debugging
@@ -69,7 +70,9 @@ class GuideService:
         validated_data["raw_llm_response"] = raw_llm_response
 
         # Save to database
-        guide_id = await self._save_guide_to_database(validated_data, request.difficulty_preference, db)
+        guide_id = await self._save_guide_to_database(
+            validated_data, request.difficulty_preference, db
+        )
 
         # Record LLM generation request
         await self._record_llm_request(
@@ -77,7 +80,7 @@ class GuideService:
             guide_id=guide_id,
             provider_used=provider_used,
             generation_time=generation_time,
-            db=db
+            db=db,
         )
 
         # Map provider names to enum values
@@ -85,7 +88,7 @@ class GuideService:
             "openai": LLMProvider.OPENAI,
             "anthropic": LLMProvider.ANTHROPIC,
             "lm_studio": LLMProvider.LM_STUDIO,
-            "mock": LLMProvider.OPENAI  # Default for mock
+            "mock": LLMProvider.OPENAI,  # Default for mock
         }
 
         logger.info(
@@ -94,7 +97,7 @@ class GuideService:
             total_steps=validated_data["total_steps"],
             total_sections=validated_data["total_sections"],
             provider=provider_used,
-            generation_time=generation_time
+            generation_time=generation_time,
         )
 
         # Create response with guide info
@@ -110,15 +113,20 @@ class GuideService:
                 difficulty_level=request.difficulty_preference,
                 category=guide_info.get("category", "general"),
                 llm_prompt_template="v1.0",
-                generation_metadata={"source": "llm_generated", "provider": provider_used},
+                generation_metadata={
+                    "source": "llm_generated",
+                    "provider": provider_used,
+                },
                 created_at=datetime.utcnow(),
-                steps=[]  # Steps are stored in database, not returned in initial response
+                steps=[],  # Steps are stored in database, not returned in initial response
             ),
             generation_time_seconds=generation_time,
-            llm_provider=provider_mapping.get(provider_used, LLMProvider.OPENAI)
+            llm_provider=provider_mapping.get(provider_used, LLMProvider.OPENAI),
         )
 
-    async def get_guide(self, guide_id: uuid.UUID, db: AsyncSession) -> Optional[StepGuide]:
+    async def get_guide(
+        self, guide_id: uuid.UUID, db: AsyncSession
+    ) -> StepGuide | None:
         """Retrieve a guide by ID with caching."""
         # Try to get from cache first (TTL: 1 hour)
         if self.cache:
@@ -134,10 +142,14 @@ class GuideService:
         logger.debug("guide_cache_miss", guide_id=str(guide_id))
 
         # Optimization: Use selectinload to avoid N+1 queries for steps and sections
-        query = select(StepGuideModel).options(
-            selectinload(StepGuideModel.steps),
-            selectinload(StepGuideModel.sections)
-        ).where(StepGuideModel.guide_id == guide_id)
+        query = (
+            select(StepGuideModel)
+            .options(
+                selectinload(StepGuideModel.steps),
+                selectinload(StepGuideModel.sections),
+            )
+            .where(StepGuideModel.guide_id == guide_id)
+        )
         result = await db.execute(query)
         guide_model = result.scalar_one_or_none()
 
@@ -162,7 +174,7 @@ class GuideService:
                 visual_markers=step.visual_markers,
                 dependencies=step.dependencies,
                 completed=False,
-                needs_assistance=False
+                needs_assistance=False,
             )
             for step in step_models
         ]
@@ -178,17 +190,21 @@ class GuideService:
             llm_prompt_template=guide_model.llm_prompt_template,
             generation_metadata=guide_model.generation_metadata,
             created_at=guide_model.created_at,
-            steps=steps
+            steps=steps,
         )
 
         # Cache the guide data (TTL: 1 hour)
         if self.cache:
             cache_key = self.cache.make_guide_key(str(guide_id))
-            await self.cache.set(cache_key, guide.model_dump(), ttl=self.cache.TTL_GUIDE_DATA)
+            await self.cache.set(
+                cache_key, guide.model_dump(), ttl=self.cache.TTL_GUIDE_DATA
+            )
 
         return guide
 
-    async def _validate_and_process_guide(self, guide_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def _validate_and_process_guide(
+        self, guide_data: dict[str, Any]
+    ) -> dict[str, Any]:
         """Validate and process LLM-generated guide data.
 
         Returns a dictionary with guide info and sections for database storage.
@@ -208,13 +224,15 @@ class GuideService:
 
             # If no sections, create a default section from flat steps list
             if not sections and "steps" in guide_info:
-                sections = [{
-                    "section_id": "main",
-                    "section_title": "Steps",
-                    "section_description": "Main steps for this guide",
-                    "section_order": 0,
-                    "steps": guide_info["steps"]
-                }]
+                sections = [
+                    {
+                        "section_id": "main",
+                        "section_title": "Steps",
+                        "section_description": "Main steps for this guide",
+                        "section_order": 0,
+                        "steps": guide_info["steps"],
+                    }
+                ]
 
             # Count total steps across all sections
             total_steps = sum(len(section.get("steps", [])) for section in sections)
@@ -232,17 +250,19 @@ class GuideService:
                 "sections": sections,
                 "total_steps": total_steps,
                 "total_sections": len(sections),
-                "estimated_duration_minutes": guide_info.get("estimated_duration_minutes", total_duration)
+                "estimated_duration_minutes": guide_info.get(
+                    "estimated_duration_minutes", total_duration
+                ),
             }
 
         except Exception as e:
-            raise GuideValidationError(f"Failed to validate guide: {e}")
+            raise GuideValidationError(f"Failed to validate guide: {e}") from e
 
     async def _save_guide_to_database(
         self,
-        validated_data: Dict[str, Any],
+        validated_data: dict[str, Any],
         difficulty_level: DifficultyLevel,
-        db: AsyncSession
+        db: AsyncSession,
     ) -> uuid.UUID:
         """Save validated guide with sections to database."""
         guide_id = validated_data["guide_id"]
@@ -257,12 +277,12 @@ class GuideService:
         for section in guide_info.get("sections", []):
             for step in section.get("steps", []):
                 step["step_index"] = global_step_counter
-                step["step_identifier"] = str(global_step_counter)  # Add identifier for adaptation
+                step["step_identifier"] = str(
+                    global_step_counter
+                )  # Add identifier for adaptation
                 global_step_counter += 1
 
         # Create guide model with guide_data JSON
-        print(f"difficulty_level in _save_guide_to_database: {difficulty_level}")
-        print(f"difficulty_level.value in _save_guide_to_database: {difficulty_level.value}")
         guide_model = StepGuideModel(
             guide_id=guide_id,
             title=guide_info["title"],
@@ -274,7 +294,7 @@ class GuideService:
             category=guide_info.get("category", "general"),
             llm_prompt_template="v1.0",
             generation_metadata={"source": "llm_generated"},
-            guide_data=guide_info  # Store full JSON structure including sections (now with fixed step_index)
+            guide_data=guide_info,  # Store full JSON structure including sections (now with fixed step_index)
         )
 
         db.add(guide_model)
@@ -297,7 +317,7 @@ class GuideService:
                 estimated_duration_minutes=sum(
                     step.get("estimated_duration_minutes", 5)
                     for step in section_data.get("steps", [])
-                )
+                ),
             )
             db.add(section_model)
 
@@ -315,11 +335,15 @@ class GuideService:
                     description=step_data["description"],
                     completion_criteria=step_data["completion_criteria"],
                     assistance_hints=step_data.get("assistance_hints", []),
-                    estimated_duration_minutes=step_data.get("estimated_duration_minutes", 5),
-                    requires_desktop_monitoring=step_data.get("requires_desktop_monitoring", False),
+                    estimated_duration_minutes=step_data.get(
+                        "estimated_duration_minutes", 5
+                    ),
+                    requires_desktop_monitoring=step_data.get(
+                        "requires_desktop_monitoring", False
+                    ),
                     visual_markers=step_data.get("visual_markers", []),
                     prerequisites=step_data.get("prerequisites", []),
-                    dependencies=[]
+                    dependencies=[],
                 )
                 db.add(step_model)
                 global_step_index += 1
@@ -333,7 +357,7 @@ class GuideService:
         guide_id: uuid.UUID,
         provider_used: str,
         generation_time: float,
-        db: AsyncSession
+        db: AsyncSession,
     ):
         """Record LLM generation request for audit purposes."""
         # Map provider names to enum values
@@ -341,7 +365,7 @@ class GuideService:
             "openai": LLMProvider.OPENAI,
             "anthropic": LLMProvider.ANTHROPIC,
             "lm_studio": LLMProvider.LM_STUDIO,
-            "mock": LLMProvider.OPENAI  # Default for mock
+            "mock": LLMProvider.OPENAI,  # Default for mock
         }
 
         llm_request = LLMGenerationRequestModel(
@@ -351,7 +375,9 @@ class GuideService:
             prompt_template_version="v1.0",
             generated_guide_id=guide_id,
             generation_time_seconds=generation_time,
-            token_usage={"provider": provider_used}  # Could be expanded with actual token usage
+            token_usage={
+                "provider": provider_used
+            },  # Could be expanded with actual token usage
         )
 
         db.add(llm_request)
@@ -361,4 +387,5 @@ class GuideService:
 async def get_guide_service(llm_service: LLMService) -> GuideService:
     """Dependency to get guide service."""
     from ..core.cache import cache_manager
+
     return GuideService(llm_service, cache=cache_manager)

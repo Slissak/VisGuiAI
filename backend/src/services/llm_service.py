@@ -3,20 +3,17 @@
 import json
 import time
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, List
-from uuid import uuid4
 from pathlib import Path
-from datetime import datetime
+from typing import Any
 
-from shared.schemas.llm_request import LLMProvider
-from ..core.config import get_settings
 from ..core.cache import CacheManager
+from ..core.config import get_settings
 from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
 
 
-class LLMProvider:
+class LLMProvider(ABC):
     """Abstract base class for LLM providers."""
 
     @abstractmethod
@@ -24,8 +21,8 @@ class LLMProvider:
         self,
         user_query: str,
         difficulty: str = "beginner",
-        format_preference: str = "detailed"
-    ) -> Dict[str, Any]:
+        format_preference: str = "detailed",
+    ) -> dict[str, Any]:
         """Generate a step-by-step guide."""
         pass
 
@@ -33,10 +30,10 @@ class LLMProvider:
     async def generate_step_alternatives(
         self,
         original_goal: str,
-        completed_steps: List[Dict[str, Any]],
-        blocked_step: Dict[str, Any],
-        problem: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        completed_steps: list[dict[str, Any]],
+        blocked_step: dict[str, Any],
+        problem: dict[str, Any],
+    ) -> dict[str, Any]:
         """Generate alternative steps when current step is blocked."""
         pass
 
@@ -56,8 +53,8 @@ class MockLLMProvider(LLMProvider):
         self,
         user_query: str,
         difficulty: str = "beginner",
-        format_preference: str = "detailed"
-    ) -> Dict[str, Any]:
+        format_preference: str = "detailed",
+    ) -> dict[str, Any]:
         """Generate a mock step-by-step guide with sections."""
         # Simulate API call delay
         await asyncio.sleep(0.5)
@@ -67,13 +64,31 @@ class MockLLMProvider(LLMProvider):
 
         # Common section types
         section_templates = [
-            {"id": "setup", "title": "Setup", "description": "Initial preparation steps"},
-            {"id": "configuration", "title": "Configuration", "description": "Settings and adjustments"},
-            {"id": "execution", "title": "Execution", "description": "Main action steps"},
-            {"id": "validation", "title": "Validation", "description": "Verification and testing"}
+            {
+                "id": "setup",
+                "title": "Setup",
+                "description": "Initial preparation steps",
+            },
+            {
+                "id": "configuration",
+                "title": "Configuration",
+                "description": "Settings and adjustments",
+            },
+            {
+                "id": "execution",
+                "title": "Execution",
+                "description": "Main action steps",
+            },
+            {
+                "id": "validation",
+                "title": "Validation",
+                "description": "Verification and testing",
+            },
         ]
 
-        section_count = 2 if difficulty == "beginner" else 3 if difficulty == "intermediate" else 4
+        section_count = (
+            2 if difficulty == "beginner" else 3 if difficulty == "intermediate" else 4
+        )
         steps_per_section = 2 if difficulty == "beginner" else 3
 
         for section_idx in range(section_count):
@@ -81,33 +96,53 @@ class MockLLMProvider(LLMProvider):
             steps = []
 
             for step_idx in range(steps_per_section):
-                global_step_idx = section_idx * steps_per_section + step_idx + 1  # Start from 1, not 0
-                steps.append({
-                    "step_index": global_step_idx,
-                    "title": f"{section_template['title']} Step {step_idx + 1}: {user_query.split()[-1] if user_query.split() else 'Task'}",
-                    "description": f"Detailed instructions for {section_template['title'].lower()} step {step_idx + 1} of {user_query}. This step involves specific actions within the {section_template['title'].lower()} phase.",
-                    "completion_criteria": f"Successfully complete the {section_template['title'].lower()} actions in step {step_idx + 1}",
-                    "assistance_hints": [
-                        f"If you're stuck on this {section_template['title'].lower()} step, try checking the documentation",
-                        f"This step typically takes 2-5 minutes to complete"
-                    ],
-                    "estimated_duration_minutes": 3 + step_idx,
-                    "requires_desktop_monitoring": global_step_idx % 2 == 0,
-                    "visual_markers": [f"button_{global_step_idx}", f"dialog_{global_step_idx}"] if global_step_idx % 2 == 0 else [],
-                    "prerequisites": [f"Complete previous {section_template['title'].lower()} steps"] if step_idx > 0 else [],
-                    "completed": False,
-                    "needs_assistance": False
-                })
+                global_step_idx = (
+                    section_idx * steps_per_section + step_idx + 1
+                )  # Start from 1, not 0
+                steps.append(
+                    {
+                        "step_index": global_step_idx,
+                        "title": f"{section_template['title']} Step {step_idx + 1}: {user_query.split()[-1] if user_query.split() else 'Task'}",
+                        "description": f"Detailed instructions for {section_template['title'].lower()} step {step_idx + 1} of {user_query}. This step involves specific actions within the {section_template['title'].lower()} phase.",
+                        "completion_criteria": f"Successfully complete the {section_template['title'].lower()} actions in step {step_idx + 1}",
+                        "assistance_hints": [
+                            f"If you're stuck on this {section_template['title'].lower()} step, try checking the documentation",
+                            "This step typically takes 2-5 minutes to complete",
+                        ],
+                        "estimated_duration_minutes": 3 + step_idx,
+                        "requires_desktop_monitoring": global_step_idx % 2 == 0,
+                        "visual_markers": (
+                            [f"button_{global_step_idx}", f"dialog_{global_step_idx}"]
+                            if global_step_idx % 2 == 0
+                            else []
+                        ),
+                        "prerequisites": (
+                            [
+                                f"Complete previous {section_template['title'].lower()} steps"
+                            ]
+                            if step_idx > 0
+                            else []
+                        ),
+                        "completed": False,
+                        "needs_assistance": False,
+                    }
+                )
 
-            sections.append({
-                "section_id": section_template["id"],
-                "section_title": section_template["title"],
-                "section_description": f"{section_template['description']} for {user_query}",
-                "section_order": section_idx,
-                "steps": steps
-            })
+            sections.append(
+                {
+                    "section_id": section_template["id"],
+                    "section_title": section_template["title"],
+                    "section_description": f"{section_template['description']} for {user_query}",
+                    "section_order": section_idx,
+                    "steps": steps,
+                }
+            )
 
-        total_duration = sum(step["estimated_duration_minutes"] for section in sections for step in section["steps"])
+        total_duration = sum(
+            step["estimated_duration_minutes"]
+            for section in sections
+            for step in section["steps"]
+        )
 
         return {
             "guide": {
@@ -116,7 +151,7 @@ class MockLLMProvider(LLMProvider):
                 "category": "general",
                 "difficulty_level": difficulty,
                 "estimated_duration_minutes": total_duration,
-                "sections": sections
+                "sections": sections,
             }
         }
 
@@ -127,10 +162,10 @@ class MockLLMProvider(LLMProvider):
     async def generate_step_alternatives(
         self,
         original_goal: str,
-        completed_steps: List[Dict[str, Any]],
-        blocked_step: Dict[str, Any],
-        problem: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        completed_steps: list[dict[str, Any]],
+        blocked_step: dict[str, Any],
+        problem: dict[str, Any],
+    ) -> dict[str, Any]:
         """Generate mock alternative steps for blocked step."""
         # Simulate API call delay
         await asyncio.sleep(0.3)
@@ -147,32 +182,32 @@ class MockLLMProvider(LLMProvider):
                 "assistance_hints": [
                     "Check the main menu or toolbar",
                     "Look for keyboard shortcuts",
-                    "Try right-clicking for context menus"
+                    "Try right-clicking for context menus",
                 ],
                 "estimated_duration_minutes": 5,
                 "requires_desktop_monitoring": True,
                 "visual_markers": ["menu_icon", "toolbar_button"],
-                "prerequisites": []
+                "prerequisites": [],
             },
             {
                 "title": f"Alternative approach 2: {blocked_title}",
-                "description": f"Another way to achieve the same goal: use the settings or preferences panel to access this functionality.",
+                "description": "Another way to achieve the same goal: use the settings or preferences panel to access this functionality.",
                 "completion_criteria": "Successfully completed via alternative method",
                 "assistance_hints": [
                     "Open settings/preferences",
                     "Search for the feature name",
-                    "Check advanced options"
+                    "Check advanced options",
                 ],
                 "estimated_duration_minutes": 7,
                 "requires_desktop_monitoring": True,
                 "visual_markers": ["settings_gear", "preferences_panel"],
-                "prerequisites": []
-            }
+                "prerequisites": [],
+            },
         ]
 
         return {
             "reason_for_change": f"Original approach blocked: {problem_desc}. Generated {len(alternative_steps)} alternative approaches.",
-            "alternative_steps": alternative_steps
+            "alternative_steps": alternative_steps,
         }
 
 
@@ -188,16 +223,19 @@ class OpenAIProvider(LLMProvider):
         if self.client is None:
             try:
                 import openai
+
                 self.client = openai.AsyncOpenAI(api_key=self.api_key)
             except ImportError:
-                raise ImportError("OpenAI package not installed. Run: pip install openai")
+                raise ImportError(
+                    "OpenAI package not installed. Run: pip install openai"
+                )
 
     async def generate_guide(
         self,
         user_query: str,
         difficulty: str = "beginner",
-        format_preference: str = "detailed"
-    ) -> Dict[str, Any]:
+        format_preference: str = "detailed",
+    ) -> dict[str, Any]:
         """Generate guide using OpenAI GPT with structured sections."""
         await self._initialize_client()
 
@@ -262,10 +300,10 @@ Guidelines:
                 model="gpt-4",
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_query}
+                    {"role": "user", "content": user_query},
                 ],
                 temperature=0.7,
-                max_tokens=2000
+                max_tokens=2000,
             )
 
             content = response.choices[0].message.content
@@ -275,7 +313,7 @@ Guidelines:
             return parsed_data
 
         except Exception as e:
-            raise Exception(f"OpenAI API error: {e}")
+            raise Exception(f"OpenAI API error: {e}") from e
 
     async def is_available(self) -> bool:
         """Check if OpenAI is available."""
@@ -285,7 +323,7 @@ Guidelines:
             await self.client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": "test"}],
-                max_tokens=5
+                max_tokens=5,
             )
             return True
         except Exception:
@@ -294,18 +332,20 @@ Guidelines:
     async def generate_step_alternatives(
         self,
         original_goal: str,
-        completed_steps: List[Dict[str, Any]],
-        blocked_step: Dict[str, Any],
-        problem: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        completed_steps: list[dict[str, Any]],
+        blocked_step: dict[str, Any],
+        problem: dict[str, Any],
+    ) -> dict[str, Any]:
         """Generate alternative steps using OpenAI GPT."""
         await self._initialize_client()
 
         # Build completed steps summary
-        completed_summary = "\n".join([
-            f"- {step.get('title', 'Unknown')}: {step.get('description', '')[:100]}"
-            for step in completed_steps
-        ])
+        completed_summary = "\n".join(
+            [
+                f"- {step.get('title', 'Unknown')}: {step.get('description', '')[:100]}"
+                for step in completed_steps
+            ]
+        )
 
         system_prompt = f"""You are an expert problem-solver for step-by-step guides.
 
@@ -353,10 +393,13 @@ Guidelines:
                 model="gpt-4",
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Generate alternatives for the blocked step."}
+                    {
+                        "role": "user",
+                        "content": "Generate alternatives for the blocked step.",
+                    },
                 ],
                 temperature=0.7,
-                max_tokens=1500
+                max_tokens=1500,
             )
 
             content = response.choices[0].message.content
@@ -366,7 +409,7 @@ Guidelines:
             return parsed_data
 
         except Exception as e:
-            raise Exception(f"OpenAI API error: {e}")
+            raise Exception(f"OpenAI API error: {e}") from e
 
 
 class LMStudioProvider(LLMProvider):
@@ -383,20 +426,23 @@ class LMStudioProvider(LLMProvider):
         if self.client is None:
             try:
                 import openai
+
                 # Use OpenAI client with custom base URL for LM Studio
                 self.client = openai.AsyncOpenAI(
                     base_url=self.base_url,
-                    api_key="lm-studio"  # LM Studio doesn't require a real API key
+                    api_key="lm-studio",  # LM Studio doesn't require a real API key
                 )
             except ImportError:
-                raise ImportError("OpenAI package not installed. Run: pip install openai")
+                raise ImportError(
+                    "OpenAI package not installed. Run: pip install openai"
+                )
 
     async def generate_guide(
         self,
         user_query: str,
         difficulty: str = "beginner",
-        format_preference: str = "detailed"
-    ) -> Dict[str, Any]:
+        format_preference: str = "detailed",
+    ) -> dict[str, Any]:
         """Generate guide using LM Studio local LLM with structured sections."""
         await self._initialize_client()
 
@@ -461,10 +507,10 @@ Guidelines:
                 model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_query}
+                    {"role": "user", "content": user_query},
                 ],
                 temperature=0.7,
-                max_tokens=2000
+                max_tokens=2000,
             )
 
             content = response.choices[0].message.content
@@ -474,7 +520,7 @@ Guidelines:
             return parsed_data
 
         except Exception as e:
-            raise Exception(f"LM Studio API error: {e}")
+            raise Exception(f"LM Studio API error: {e}") from e
 
     async def is_available(self) -> bool:
         """Check if LM Studio is available."""
@@ -484,7 +530,7 @@ Guidelines:
             await self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": "test"}],
-                max_tokens=5
+                max_tokens=5,
             )
             return True
         except Exception:
@@ -493,18 +539,20 @@ Guidelines:
     async def generate_step_alternatives(
         self,
         original_goal: str,
-        completed_steps: List[Dict[str, Any]],
-        blocked_step: Dict[str, Any],
-        problem: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        completed_steps: list[dict[str, Any]],
+        blocked_step: dict[str, Any],
+        problem: dict[str, Any],
+    ) -> dict[str, Any]:
         """Generate alternative steps using LM Studio."""
         await self._initialize_client()
 
         # Build completed steps summary
-        completed_summary = "\n".join([
-            f"- {step.get('title', 'Unknown')}: {step.get('description', '')[:100]}"
-            for step in completed_steps
-        ])
+        completed_summary = "\n".join(
+            [
+                f"- {step.get('title', 'Unknown')}: {step.get('description', '')[:100]}"
+                for step in completed_steps
+            ]
+        )
 
         system_prompt = f"""You are an expert problem-solver for step-by-step guides.
 
@@ -546,10 +594,10 @@ Return ONLY valid JSON:
                 model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": "Generate alternatives."}
+                    {"role": "user", "content": "Generate alternatives."},
                 ],
                 temperature=0.7,
-                max_tokens=1500
+                max_tokens=1500,
             )
 
             content = response.choices[0].message.content
@@ -559,7 +607,7 @@ Return ONLY valid JSON:
             return parsed_data
 
         except Exception as e:
-            raise Exception(f"LM Studio API error: {e}")
+            raise Exception(f"LM Studio API error: {e}") from e
 
 
 class AnthropicProvider(LLMProvider):
@@ -574,16 +622,19 @@ class AnthropicProvider(LLMProvider):
         if self.client is None:
             try:
                 import anthropic
+
                 self.client = anthropic.AsyncAnthropic(api_key=self.api_key)
             except ImportError:
-                raise ImportError("Anthropic package not installed. Run: pip install anthropic")
+                raise ImportError(
+                    "Anthropic package not installed. Run: pip install anthropic"
+                )
 
     async def generate_guide(
         self,
         user_query: str,
         difficulty: str = "beginner",
-        format_preference: str = "detailed"
-    ) -> Dict[str, Any]:
+        format_preference: str = "detailed",
+    ) -> dict[str, Any]:
         """Generate guide using Anthropic Claude."""
         await self._initialize_client()
 
@@ -645,7 +696,7 @@ Make it {format_preference} and practical."""
             response = await self.client.messages.create(
                 model="claude-3-sonnet-20240229",
                 max_tokens=2000,
-                messages=[{"role": "user", "content": prompt}]
+                messages=[{"role": "user", "content": prompt}],
             )
 
             content = response.content[0].text
@@ -655,7 +706,7 @@ Make it {format_preference} and practical."""
             return parsed_data
 
         except Exception as e:
-            raise Exception(f"Anthropic API error: {e}")
+            raise Exception(f"Anthropic API error: {e}") from e
 
     async def is_available(self) -> bool:
         """Check if Anthropic is available."""
@@ -665,7 +716,7 @@ Make it {format_preference} and practical."""
             await self.client.messages.create(
                 model="claude-3-haiku-20240307",
                 max_tokens=5,
-                messages=[{"role": "user", "content": "test"}]
+                messages=[{"role": "user", "content": "test"}],
             )
             return True
         except Exception:
@@ -674,18 +725,20 @@ Make it {format_preference} and practical."""
     async def generate_step_alternatives(
         self,
         original_goal: str,
-        completed_steps: List[Dict[str, Any]],
-        blocked_step: Dict[str, Any],
-        problem: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        completed_steps: list[dict[str, Any]],
+        blocked_step: dict[str, Any],
+        problem: dict[str, Any],
+    ) -> dict[str, Any]:
         """Generate alternative steps using Anthropic Claude."""
         await self._initialize_client()
 
         # Build completed steps summary
-        completed_summary = "\n".join([
-            f"- {step.get('title', 'Unknown')}: {step.get('description', '')[:100]}"
-            for step in completed_steps
-        ])
+        completed_summary = "\n".join(
+            [
+                f"- {step.get('title', 'Unknown')}: {step.get('description', '')[:100]}"
+                for step in completed_steps
+            ]
+        )
 
         prompt = f"""You are an expert problem-solver for step-by-step guides.
 
@@ -731,7 +784,7 @@ Guidelines:
             response = await self.client.messages.create(
                 model="claude-3-sonnet-20240229",
                 max_tokens=1500,
-                messages=[{"role": "user", "content": prompt}]
+                messages=[{"role": "user", "content": prompt}],
             )
 
             content = response.content[0].text
@@ -741,7 +794,7 @@ Guidelines:
             return parsed_data
 
         except Exception as e:
-            raise Exception(f"Anthropic API error: {e}")
+            raise Exception(f"Anthropic API error: {e}") from e
 
 
 class LLMService:
@@ -755,7 +808,7 @@ class LLMService:
         self.log_file = None
         self.cache = cache
 
-    def _initialize_providers(self) -> Dict[str, LLMProvider]:
+    def _initialize_providers(self) -> dict[str, LLMProvider]:
         """Initialize available LLM providers."""
         providers = {}
 
@@ -765,8 +818,7 @@ class LLMService:
         # Add LM Studio if enabled (highest priority for local development)
         if self.settings.enable_lm_studio:
             providers["lm_studio"] = LMStudioProvider(
-                self.settings.lm_studio_base_url,
-                self.settings.lm_studio_model
+                self.settings.lm_studio_base_url, self.settings.lm_studio_model
             )
 
         # Add OpenAI if API key is available
@@ -804,7 +856,9 @@ class LLMService:
                 self.fallback_provider = self.providers["mock"]
         elif "openai" in available_providers:
             self.primary_provider = self.providers["openai"]
-            self.fallback_provider = self.providers.get("anthropic") or self.providers["mock"]
+            self.fallback_provider = (
+                self.providers.get("anthropic") or self.providers["mock"]
+            )
         elif "anthropic" in available_providers:
             self.primary_provider = self.providers["anthropic"]
             self.fallback_provider = self.providers["mock"]
@@ -818,8 +872,8 @@ class LLMService:
         self,
         user_query: str,
         difficulty: str = "beginner",
-        format_preference: str = "detailed"
-    ) -> tuple[Dict[str, Any], str, float]:
+        format_preference: str = "detailed",
+    ) -> tuple[dict[str, Any], str, float]:
         """Generate guide with fallback support and caching.
 
         Returns:
@@ -835,12 +889,12 @@ class LLMService:
                     "llm_cache_hit",
                     operation="generate_guide",
                     user_query=user_query[:100],
-                    difficulty=difficulty
+                    difficulty=difficulty,
                 )
                 return (
                     cached_response.get("guide_data"),
                     cached_response.get("provider_used", "cached"),
-                    cached_response.get("generation_time", 0.0)
+                    cached_response.get("generation_time", 0.0),
                 )
 
         start_time = time.time()
@@ -850,7 +904,7 @@ class LLMService:
             operation="generate_guide",
             user_query=user_query,
             difficulty=difficulty,
-            format_preference=format_preference
+            format_preference=format_preference,
         )
 
         # Try primary provider first
@@ -860,14 +914,16 @@ class LLMService:
                     user_query, difficulty, format_preference
                 )
                 generation_time = time.time() - start_time
-                provider_name = getattr(self.primary_provider, 'provider_name', 'primary')
+                provider_name = getattr(
+                    self.primary_provider, "provider_name", "primary"
+                )
 
                 logger.info(
                     "llm_request_completed",
                     operation="generate_guide",
                     provider=provider_name,
                     latency_ms=round(generation_time * 1000, 2),
-                    user_query=user_query[:100]  # Truncate for logging
+                    user_query=user_query[:100],  # Truncate for logging
                 )
 
                 # Cache the result (TTL: 24 hours)
@@ -878,9 +934,9 @@ class LLMService:
                         {
                             "guide_data": result,
                             "provider_used": provider_name,
-                            "generation_time": generation_time
+                            "generation_time": generation_time,
                         },
-                        ttl=self.cache.TTL_LLM_RESPONSE
+                        ttl=self.cache.TTL_LLM_RESPONSE,
                     )
 
                 return result, provider_name, generation_time
@@ -890,7 +946,7 @@ class LLMService:
                 provider="primary",
                 operation="generate_guide",
                 error=str(e),
-                error_type=type(e).__name__
+                error_type=type(e).__name__,
             )
 
         # Fallback to secondary provider
@@ -900,7 +956,9 @@ class LLMService:
                     user_query, difficulty, format_preference
                 )
                 generation_time = time.time() - start_time
-                provider_name = getattr(self.fallback_provider, 'provider_name', 'fallback')
+                provider_name = getattr(
+                    self.fallback_provider, "provider_name", "fallback"
+                )
 
                 logger.info(
                     "llm_request_completed",
@@ -908,7 +966,7 @@ class LLMService:
                     provider=provider_name,
                     fallback=True,
                     latency_ms=round(generation_time * 1000, 2),
-                    user_query=user_query[:100]  # Truncate for logging
+                    user_query=user_query[:100],  # Truncate for logging
                 )
 
                 # Cache the fallback result (TTL: 24 hours)
@@ -919,9 +977,9 @@ class LLMService:
                         {
                             "guide_data": result,
                             "provider_used": provider_name,
-                            "generation_time": generation_time
+                            "generation_time": generation_time,
                         },
-                        ttl=self.cache.TTL_LLM_RESPONSE
+                        ttl=self.cache.TTL_LLM_RESPONSE,
                     )
 
                 return result, provider_name, generation_time
@@ -931,23 +989,23 @@ class LLMService:
                     provider="fallback",
                     operation="generate_guide",
                     error=str(e),
-                    error_type=type(e).__name__
+                    error_type=type(e).__name__,
                 )
 
         logger.error(
             "all_llm_providers_failed",
             operation="generate_guide",
-            user_query=user_query[:100]
+            user_query=user_query[:100],
         )
         raise Exception("All LLM providers failed")
 
     async def generate_step_alternatives(
         self,
         original_goal: str,
-        completed_steps: List[Dict[str, Any]],
-        blocked_step: Dict[str, Any],
-        problem: Dict[str, Any]
-    ) -> tuple[Dict[str, Any], str, float]:
+        completed_steps: list[dict[str, Any]],
+        blocked_step: dict[str, Any],
+        problem: dict[str, Any],
+    ) -> tuple[dict[str, Any], str, float]:
         """Generate alternative steps with fallback support.
 
         Returns:
@@ -959,7 +1017,7 @@ class LLMService:
             "llm_request_started",
             operation="generate_alternatives",
             original_goal=original_goal[:100],  # Truncate for logging
-            blocked_step_title=blocked_step.get("title", "Unknown")
+            blocked_step_title=blocked_step.get("title", "Unknown"),
         )
 
         # Try primary provider first
@@ -969,14 +1027,16 @@ class LLMService:
                     original_goal, completed_steps, blocked_step, problem
                 )
                 generation_time = time.time() - start_time
-                provider_name = getattr(self.primary_provider, 'provider_name', 'primary')
+                provider_name = getattr(
+                    self.primary_provider, "provider_name", "primary"
+                )
 
                 logger.info(
                     "llm_request_completed",
                     operation="generate_alternatives",
                     provider=provider_name,
                     latency_ms=round(generation_time * 1000, 2),
-                    alternatives_count=len(result.get("alternative_steps", []))
+                    alternatives_count=len(result.get("alternative_steps", [])),
                 )
 
                 return result, provider_name, generation_time
@@ -986,7 +1046,7 @@ class LLMService:
                 provider="primary",
                 operation="generate_alternatives",
                 error=str(e),
-                error_type=type(e).__name__
+                error_type=type(e).__name__,
             )
 
         # Fallback to secondary provider
@@ -996,7 +1056,9 @@ class LLMService:
                     original_goal, completed_steps, blocked_step, problem
                 )
                 generation_time = time.time() - start_time
-                provider_name = getattr(self.fallback_provider, 'provider_name', 'fallback')
+                provider_name = getattr(
+                    self.fallback_provider, "provider_name", "fallback"
+                )
 
                 logger.info(
                     "llm_request_completed",
@@ -1004,7 +1066,7 @@ class LLMService:
                     provider=provider_name,
                     fallback=True,
                     latency_ms=round(generation_time * 1000, 2),
-                    alternatives_count=len(result.get("alternative_steps", []))
+                    alternatives_count=len(result.get("alternative_steps", [])),
                 )
 
                 return result, provider_name, generation_time
@@ -1014,17 +1076,17 @@ class LLMService:
                     provider="fallback",
                     operation="generate_alternatives",
                     error=str(e),
-                    error_type=type(e).__name__
+                    error_type=type(e).__name__,
                 )
 
         logger.error(
             "all_llm_providers_failed",
             operation="generate_alternatives",
-            original_goal=original_goal[:100]
+            original_goal=original_goal[:100],
         )
         raise Exception("All LLM providers failed to generate alternatives")
 
-    async def get_provider_status(self) -> Dict[str, bool]:
+    async def get_provider_status(self) -> dict[str, bool]:
         """Get status of all providers."""
         status = {}
         for name, provider in self.providers.items():
@@ -1041,6 +1103,7 @@ async def get_llm_service() -> LLMService:
     global llm_service
     if llm_service is None:
         from ..core.cache import cache_manager
+
         llm_service = LLMService(cache=cache_manager)
         await llm_service.initialize()
     return llm_service
@@ -1051,6 +1114,7 @@ async def init_llm_service():
     global llm_service
     if llm_service is None:
         from ..core.cache import cache_manager
+
         llm_service = LLMService(cache=cache_manager)
     await llm_service.initialize()
 

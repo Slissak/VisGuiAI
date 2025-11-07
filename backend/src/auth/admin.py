@@ -1,20 +1,23 @@
 """Admin authorization middleware and dependencies."""
 
-from fastapi import HTTPException, status, Depends
+from fastapi import Depends, HTTPException, status
 
 from ..models.user import UserModel
-from .middleware import get_current_user
 from ..utils.logging import get_logger
+from .middleware import get_current_user
 
 logger = get_logger(__name__)
 
 
 class AdminAuthorizationError(Exception):
     """Exception raised when admin authorization fails."""
+
     pass
 
 
-async def require_admin(current_user: UserModel = Depends(get_current_user)) -> UserModel:
+async def require_admin(
+    current_user: UserModel = Depends(get_current_user),
+) -> UserModel:
     """Dependency to require admin access.
 
     This dependency should be used on admin-only endpoints to ensure
@@ -34,17 +37,15 @@ async def require_admin(current_user: UserModel = Depends(get_current_user)) -> 
             "admin_access_denied",
             user_id=current_user.user_id,
             email=current_user.email,
-            tier=current_user.tier
+            tier=current_user.tier,
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required. You do not have permission to access this resource."
+            detail="Admin access required. You do not have permission to access this resource.",
         )
 
     logger.info(
-        "admin_access_granted",
-        user_id=current_user.user_id,
-        email=current_user.email
+        "admin_access_granted", user_id=current_user.user_id, email=current_user.email
     )
 
     return current_user
