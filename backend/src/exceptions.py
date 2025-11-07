@@ -4,7 +4,7 @@ This module defines a hierarchy of custom exceptions with error codes
 and detailed information for API error responses.
 """
 
-from typing import Dict, Any, Optional
+from typing import Any
 
 
 class GuideException(Exception):
@@ -14,7 +14,7 @@ class GuideException(Exception):
     structured error information including error codes and details.
     """
 
-    def __init__(self, message: str, code: str, details: Optional[Dict[str, Any]] = None):
+    def __init__(self, message: str, code: str, details: dict[str, Any] | None = None):
         """Initialize GuideException.
 
         Args:
@@ -40,7 +40,7 @@ class GuideNotFoundError(GuideException):
         super().__init__(
             message=f"Guide {guide_id} not found",
             code="GUIDE_NOT_FOUND",
-            details={"guide_id": guide_id}
+            details={"guide_id": guide_id},
         )
 
 
@@ -56,14 +56,14 @@ class SessionNotFoundError(GuideException):
         super().__init__(
             message=f"Session {session_id} not found",
             code="SESSION_NOT_FOUND",
-            details={"session_id": session_id}
+            details={"session_id": session_id},
         )
 
 
 class InvalidStepIdentifierError(GuideException):
     """Raised when a step identifier has an invalid format."""
 
-    def __init__(self, identifier: str, reason: Optional[str] = None):
+    def __init__(self, identifier: str, reason: str | None = None):
         """Initialize InvalidStepIdentifierError.
 
         Args:
@@ -79,8 +79,9 @@ class InvalidStepIdentifierError(GuideException):
             code="INVALID_STEP_IDENTIFIER",
             details={
                 "identifier": identifier,
-                "reason": reason or "Does not match expected format (e.g., '0', '1a', '2b')"
-            }
+                "reason": reason
+                or "Does not match expected format (e.g., '0', '1a', '2b')",
+            },
         )
 
 
@@ -97,17 +98,14 @@ class LLMGenerationError(GuideException):
         super().__init__(
             message=f"LLM generation failed with {provider}",
             code="LLM_GENERATION_FAILED",
-            details={
-                "provider": provider,
-                "error": error
-            }
+            details={"provider": provider, "error": error},
         )
 
 
 class AdaptationError(GuideException):
     """Raised when guide adaptation fails."""
 
-    def __init__(self, reason: str, guide_id: Optional[str] = None):
+    def __init__(self, reason: str, guide_id: str | None = None):
         """Initialize AdaptationError.
 
         Args:
@@ -121,7 +119,7 @@ class AdaptationError(GuideException):
         super().__init__(
             message=f"Guide adaptation failed: {reason}",
             code="ADAPTATION_FAILED",
-            details=details
+            details=details,
         )
 
 
@@ -139,9 +137,5 @@ class ValidationError(GuideException):
         super().__init__(
             message=f"Validation failed for field '{field}': {reason}",
             code="VALIDATION_ERROR",
-            details={
-                "field": field,
-                "value": str(value),
-                "reason": reason
-            }
+            details={"field": field, "value": str(value), "reason": reason},
         )

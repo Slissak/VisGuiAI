@@ -1,19 +1,20 @@
 """API routes for step management."""
 
 import uuid
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from shared.schemas.api_responses import StepCompletionRequest, StepResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.schemas.api_responses import StepCompletionRequest, StepResponse
-
-from ..core.database import get_db
-from ..services.step_service import (
-    StepService, get_step_service, StepNotFoundError, InvalidStepStateError
-)
-from ..services.session_service import SessionService, get_session_service
 from ..auth.middleware import get_current_user
+from ..core.database import get_db
+from ..services.session_service import SessionService, get_session_service
+from ..services.step_service import (
+    InvalidStepStateError,
+    StepNotFoundError,
+    StepService,
+    get_step_service,
+)
 
 router = APIRouter(prefix="/api/v1/steps", tags=["steps"])
 
@@ -34,16 +35,16 @@ router = APIRouter(prefix="/api/v1/steps", tags=["steps"])
                         "status": "completed",
                         "completed_at": "2025-10-26T10:30:00Z",
                         "completion_method": "manual",
-                        "time_taken_minutes": 5
+                        "time_taken_minutes": 5,
                     }
                 }
-            }
+            },
         },
         404: {"description": "Step or session not found"},
         403: {"description": "Access denied to this session"},
-        400: {"description": "Invalid step state or completion request"}
+        400: {"description": "Invalid step state or completion request"},
     },
-    summary="Complete a step manually or via desktop monitoring"
+    summary="Complete a step manually or via desktop monitoring",
 )
 async def complete_step(
     step_id: uuid.UUID,
@@ -52,7 +53,7 @@ async def complete_step(
     current_user: str = Depends(get_current_user),
     step_service: StepService = Depends(get_step_service),
     session_service: SessionService = Depends(get_session_service),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Complete a step using either manual confirmation or desktop monitoring.
@@ -99,37 +100,28 @@ async def complete_step(
         if not session_detail:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Session {session_id} not found"
+                detail=f"Session {session_id} not found",
             )
 
         if session_detail.session.user_id != current_user:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied to this session"
+                detail="Access denied to this session",
             )
 
         response = await step_service.complete_step(session_id, step_id, request, db)
         return response
 
     except StepNotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     except InvalidStepStateError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to complete step: {str(e)}"
+            detail=f"Failed to complete step: {str(e)}",
         )
 
 
@@ -148,15 +140,15 @@ async def complete_step(
                         "title": "Configure deployment settings",
                         "status": "in_progress",
                         "needs_assistance": True,
-                        "assistance_requested_at": "2025-10-26T10:30:00Z"
+                        "assistance_requested_at": "2025-10-26T10:30:00Z",
                     }
                 }
-            }
+            },
         },
         404: {"description": "Step or session not found"},
-        403: {"description": "Access denied to this session"}
+        403: {"description": "Access denied to this session"},
     },
-    summary="Mark a step as needing assistance"
+    summary="Mark a step as needing assistance",
 )
 async def mark_needs_assistance(
     step_id: uuid.UUID,
@@ -165,7 +157,7 @@ async def mark_needs_assistance(
     current_user: str = Depends(get_current_user),
     step_service: StepService = Depends(get_step_service),
     session_service: SessionService = Depends(get_session_service),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Mark a step as needing or not needing assistance.
@@ -206,13 +198,13 @@ async def mark_needs_assistance(
         if not session_detail:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Session {session_id} not found"
+                detail=f"Session {session_id} not found",
             )
 
         if session_detail.session.user_id != current_user:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied to this session"
+                detail="Access denied to this session",
             )
 
         response = await step_service.mark_needs_assistance(
@@ -221,25 +213,19 @@ async def mark_needs_assistance(
         return response
 
     except StepNotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update step assistance: {str(e)}"
+            detail=f"Failed to update step assistance: {str(e)}",
         )
 
 
 @router.get(
     "/session/{session_id}",
-    response_model=List[StepResponse],
+    response_model=list[StepResponse],
     responses={
         200: {
             "description": "Session steps retrieved successfully",
@@ -252,7 +238,7 @@ async def mark_needs_assistance(
                             "step_index": 0,
                             "title": "Install Vercel CLI",
                             "status": "completed",
-                            "completed_at": "2025-10-26T09:15:00Z"
+                            "completed_at": "2025-10-26T09:15:00Z",
                         },
                         {
                             "step_id": "751e8400-e29b-41d4-a716-446655440000",
@@ -260,30 +246,30 @@ async def mark_needs_assistance(
                             "step_index": 1,
                             "title": "Configure Vercel project",
                             "status": "in_progress",
-                            "needs_assistance": False
+                            "needs_assistance": False,
                         },
                         {
                             "step_id": "752e8400-e29b-41d4-a716-446655440000",
                             "session_id": "550e8400-e29b-41d4-a716-446655440000",
                             "step_index": 2,
                             "title": "Deploy to production",
-                            "status": "pending"
-                        }
+                            "status": "pending",
+                        },
                     ]
                 }
-            }
+            },
         },
         404: {"description": "Session not found"},
-        403: {"description": "Access denied to this session"}
+        403: {"description": "Access denied to this session"},
     },
-    summary="Get all steps for a session with completion status"
+    summary="Get all steps for a session with completion status",
 )
 async def get_session_steps(
     session_id: uuid.UUID,
     current_user: str = Depends(get_current_user),
     step_service: StepService = Depends(get_step_service),
     session_service: SessionService = Depends(get_session_service),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get all steps for a session with their completion status.
@@ -329,25 +315,22 @@ async def get_session_steps(
         if not session_detail:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Session {session_id} not found"
+                detail=f"Session {session_id} not found",
             )
 
         if session_detail.session.user_id != current_user:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied to this session"
+                detail="Access denied to this session",
             )
 
         steps = await step_service.get_session_steps(session_id, db)
         return steps
 
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get session steps: {str(e)}"
+            detail=f"Failed to get session steps: {str(e)}",
         )

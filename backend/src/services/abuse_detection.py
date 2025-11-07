@@ -1,17 +1,15 @@
 """Abuse detection service for monitoring and alerting on suspicious activity."""
 
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
-from sqlalchemy.sql.expression import cast
-from sqlalchemy.types import Date
 
+from sqlalchemy import and_, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..core.redis import redis_manager
+from ..models.session import UserSessionModel
 from ..models.user import UserModel
 from ..shared.db.models.usage import UserUsage
-from ..models.session import UserSessionModel
 from ..utils.logging import get_logger
-from ..core.redis import redis_manager
 
 logger = get_logger(__name__)
 
@@ -26,7 +24,7 @@ class AbuseMetrics:
         unique_ips_per_day: int,
         failed_requests_per_hour: int,
         cost_spike_ratio: float,
-        session_count_per_day: int
+        session_count_per_day: int,
     ):
         self.user_id = user_id
         self.requests_per_hour = requests_per_hour
@@ -46,35 +44,35 @@ class AbuseDetectionService:
             "unique_ips_per_day": 3,
             "failed_requests_per_hour": 20,
             "cost_spike_ratio": 3.0,  # 3x average daily cost
-            "session_count_per_day": 20
+            "session_count_per_day": 20,
         },
         "basic": {
             "requests_per_hour": 150,
             "unique_ips_per_day": 5,
             "failed_requests_per_hour": 50,
             "cost_spike_ratio": 4.0,
-            "session_count_per_day": 50
+            "session_count_per_day": 50,
         },
         "professional": {
             "requests_per_hour": 300,
             "unique_ips_per_day": 10,
             "failed_requests_per_hour": 100,
             "cost_spike_ratio": 5.0,
-            "session_count_per_day": 100
+            "session_count_per_day": 100,
         },
         "enterprise": {
             "requests_per_hour": 1000,
             "unique_ips_per_day": 50,
             "failed_requests_per_hour": 200,
             "cost_spike_ratio": 10.0,
-            "session_count_per_day": 500
-        }
+            "session_count_per_day": 500,
+        },
     }
 
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def check_user_abuse(self, user_id: str) -> Tuple[bool, List[str]]:
+    async def check_user_abuse(self, user_id: str) -> tuple[bool, list[str]]:
         """Check if a user is exhibiting abuse patterns.
 
         Returns:
@@ -132,7 +130,7 @@ class AbuseDetectionService:
                 user_id=user_id,
                 tier=user.tier,
                 email=user.email,
-                violations=violations
+                violations=violations,
             )
             # Store abuse alert in Redis for admin dashboard
             await self._store_abuse_alert(user_id, user.email, violations)
@@ -142,9 +140,9 @@ class AbuseDetectionService:
     async def _collect_metrics(self, user_id: str) -> AbuseMetrics:
         """Collect abuse detection metrics for a user."""
         now = datetime.utcnow()
-        one_hour_ago = now - timedelta(hours=1)
+        now - timedelta(hours=1)
         one_day_ago = now - timedelta(days=1)
-        seven_days_ago = now - timedelta(days=7)
+        now - timedelta(days=7)
 
         # Get requests per hour (from Redis rate limiter)
         requests_per_hour = await self._get_requests_per_hour(user_id)
@@ -160,11 +158,10 @@ class AbuseDetectionService:
 
         # Get session count per day
         result = await self.db.execute(
-            select(func.count(UserSessionModel.session_id))
-            .where(
+            select(func.count(UserSessionModel.session_id)).where(
                 and_(
                     UserSessionModel.user_id == user_id,
-                    UserSessionModel.created_at >= one_day_ago
+                    UserSessionModel.created_at >= one_day_ago,
                 )
             )
         )
@@ -176,7 +173,7 @@ class AbuseDetectionService:
             unique_ips_per_day=unique_ips_per_day,
             failed_requests_per_hour=failed_requests_per_hour,
             cost_spike_ratio=cost_spike_ratio,
-            session_count_per_day=session_count_per_day
+            session_count_per_day=session_count_per_day,
         )
 
     async def _get_requests_per_hour(self, user_id: str) -> int:
@@ -190,7 +187,9 @@ class AbuseDetectionService:
             # Multiply by 60 to estimate hourly rate from per-minute window
             return count * 60
         except Exception as e:
-            logger.error("abuse_metrics_redis_error", error=str(e), metric="requests_per_hour")
+            logger.error(
+                "abuse_metrics_redis_error", error=str(e), metric="requests_per_hour"
+            )
             return 0
 
     async def _get_unique_ips_per_day(self, user_id: str) -> int:
@@ -216,7 +215,9 @@ class AbuseDetectionService:
             count = await redis_manager.client.get(key)
             return int(count) if count else 0
         except Exception as e:
-            logger.error("abuse_metrics_redis_error", error=str(e), metric="failed_requests")
+            logger.error(
+                "abuse_metrics_redis_error", error=str(e), metric="failed_requests"
+            )
             return 0
 
     async def _get_cost_spike_ratio(self, user_id: str) -> float:
@@ -234,11 +235,10 @@ class AbuseDetectionService:
             # Get 7-day average cost
             seven_days_ago = datetime.utcnow() - timedelta(days=7)
             result = await self.db.execute(
-                select(func.avg(UserUsage.daily_cost))
-                .where(
+                select(func.avg(UserUsage.daily_cost)).where(
                     and_(
                         UserUsage.user_id == user_id,
-                        UserUsage.last_daily_reset >= seven_days_ago
+                        UserUsage.last_daily_reset >= seven_days_ago,
                     )
                 )
             )
@@ -252,7 +252,7 @@ class AbuseDetectionService:
             logger.error("abuse_metrics_db_error", error=str(e), metric="cost_spike")
             return 0.0
 
-    async def _store_abuse_alert(self, user_id: str, email: str, violations: List[str]):
+    async def _store_abuse_alert(self, user_id: str, email: str, violations: list[str]):
         """Store abuse alert in Redis for admin dashboard."""
         if not redis_manager.is_available:
             return
@@ -263,7 +263,7 @@ class AbuseDetectionService:
                 "user_id": user_id,
                 "email": email,
                 "violations": ",".join(violations),
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
             }
 
             # Store alert with 7-day expiration
@@ -272,22 +272,23 @@ class AbuseDetectionService:
 
             # Add to sorted set for dashboard listing
             await redis_manager.client.zadd(
-                "abuse_alerts:list",
-                {user_id: datetime.utcnow().timestamp()}
+                "abuse_alerts:list", {user_id: datetime.utcnow().timestamp()}
             )
 
             logger.info("abuse_alert_stored", user_id=user_id, email=email)
         except Exception as e:
             logger.error("abuse_alert_storage_error", error=str(e), user_id=user_id)
 
-    async def get_recent_abuse_alerts(self, limit: int = 50) -> List[Dict]:
+    async def get_recent_abuse_alerts(self, limit: int = 50) -> list[dict]:
         """Get recent abuse alerts for admin dashboard."""
         if not redis_manager.is_available:
             return []
 
         try:
             # Get most recent user IDs from sorted set
-            user_ids = await redis_manager.client.zrevrange("abuse_alerts:list", 0, limit - 1)
+            user_ids = await redis_manager.client.zrevrange(
+                "abuse_alerts:list", 0, limit - 1
+            )
 
             alerts = []
             for user_id in user_ids:
@@ -295,12 +296,14 @@ class AbuseDetectionService:
                 alert_data = await redis_manager.client.hgetall(alert_key)
 
                 if alert_data:
-                    alerts.append({
-                        "user_id": alert_data.get("user_id", ""),
-                        "email": alert_data.get("email", ""),
-                        "violations": alert_data.get("violations", "").split(","),
-                        "timestamp": alert_data.get("timestamp", "")
-                    })
+                    alerts.append(
+                        {
+                            "user_id": alert_data.get("user_id", ""),
+                            "email": alert_data.get("email", ""),
+                            "violations": alert_data.get("violations", "").split(","),
+                            "timestamp": alert_data.get("timestamp", ""),
+                        }
+                    )
 
             return alerts
         except Exception as e:

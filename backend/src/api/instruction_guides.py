@@ -1,25 +1,23 @@
 """API routes for instruction-based guide generation and progressive step management."""
 
 import uuid
-from typing import Optional
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field
-
-from ..core.database import get_db
-from ..core.config import get_settings
-from ..services.llm_service import get_llm_service
-from ..services.step_disclosure_service import StepDisclosureService
-from ..services.guide_service import GuideService, get_guide_service
-from ..services.session_service import SessionService, get_session_service
-from ..auth.middleware import get_current_user
 from shared.schemas.step_guide import DifficultyLevel
-from ..shared.usage.usage_service import UsageService
-from ..shared.billing.cost_calculator import CostCalculator
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..auth.middleware import get_current_user
+from ..core.config import get_settings
+from ..core.database import get_db
 from ..models.user import UserModel
+from ..services.guide_service import GuideService
+from ..services.llm_service import get_llm_service
+from ..services.session_service import SessionService, get_session_service
+from ..services.step_disclosure_service import StepDisclosureService
+from ..shared.billing.cost_calculator import CostCalculator
+from ..shared.usage.usage_service import UsageService
 
 settings = get_settings()
 
@@ -61,9 +59,9 @@ class InstructionGuideRequest(BaseModel):
 
 class StepCompletionRequest(BaseModel):
     """Request model for marking step as completed."""
-    completion_notes: Optional[str] = Field(None, description="Optional notes about step completion")
-    encountered_issues: Optional[str] = Field(None, description="Any issues encountered during step")
-    time_taken_minutes: Optional[int] = Field(None, description="Actual time taken for step")
+    completion_notes: str | None = Field(None, description="Optional notes about step completion")
+    encountered_issues: str | None = Field(None, description="Any issues encountered during step")
+    time_taken_minutes: int | None = Field(None, description="Actual time taken for step")
 
 
 class CurrentStepResponse(BaseModel):
@@ -272,6 +270,7 @@ async def generate_instruction_guide(
 
         # Get the guide to access raw LLM response
         from sqlalchemy import select
+
         from ..models.database import StepGuideModel
         guide_query = select(StepGuideModel).where(StepGuideModel.guide_id == guide_id)
         guide_result = await db.execute(guide_query)

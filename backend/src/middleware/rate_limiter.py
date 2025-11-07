@@ -1,8 +1,9 @@
 """Rate limiting middleware with Redis backend and tier-based limits."""
 
 import time
-from typing import Optional, Callable, Dict, Tuple
-from fastapi import Request, Response, HTTPException, status
+from collections.abc import Callable
+
+from fastapi import HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
@@ -21,7 +22,7 @@ class RateLimitExceeded(HTTPException):
         super().__init__(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=detail,
-            headers={"Retry-After": str(retry_after)}
+            headers={"Retry-After": str(retry_after)},
         )
 
 
@@ -33,11 +34,8 @@ class RateLimiter:
         logger.info("RateLimiter initialized with Redis backend")
 
     async def check_rate_limit(
-        self,
-        key: str,
-        max_requests: int,
-        window_seconds: int
-    ) -> Tuple[bool, int, int]:
+        self, key: str, max_requests: int, window_seconds: int
+    ) -> tuple[bool, int, int]:
         """Check if rate limit is exceeded using sliding window.
 
         Args:
@@ -83,10 +81,14 @@ class RateLimiter:
 
             if current_count >= max_requests:
                 # Get the oldest request in the window
-                oldest = await self.redis.client.zrange(redis_key, 0, 0, withscores=True)
+                oldest = await self.redis.client.zrange(
+                    redis_key, 0, 0, withscores=True
+                )
                 if oldest:
                     oldest_timestamp = oldest[0][1]
-                    retry_after = int(oldest_timestamp + window_seconds - current_time) + 1
+                    retry_after = (
+                        int(oldest_timestamp + window_seconds - current_time) + 1
+                    )
                 else:
                     retry_after = window_seconds
 
@@ -95,7 +97,7 @@ class RateLimiter:
                     key=key,
                     current_count=current_count,
                     max_requests=max_requests,
-                    retry_after=retry_after
+                    retry_after=retry_after,
                 )
                 return False, current_count, retry_after
 
@@ -103,7 +105,7 @@ class RateLimiter:
                 "rate_limit_check",
                 key=key,
                 current_count=current_count + 1,
-                max_requests=max_requests
+                max_requests=max_requests,
             )
             return True, current_count + 1, 0
 
@@ -113,7 +115,7 @@ class RateLimiter:
                 "rate_limit_check_failed",
                 error=str(e),
                 error_type=type(e).__name__,
-                key=key
+                key=key,
             )
             return True, 0, 0
 
@@ -136,14 +138,12 @@ class RateLimiter:
             redis_key = f"rate_limit:{key}"
 
             # Count requests in current window
-            count = await self.redis.client.zcount(redis_key, window_start, current_time)
+            count = await self.redis.client.zcount(
+                redis_key, window_start, current_time
+            )
             return count
         except Exception as e:
-            logger.error(
-                "get_current_usage_failed",
-                error=str(e),
-                key=key
-            )
+            logger.error("get_current_usage_failed", error=str(e), key=key)
             return 0
 
 
@@ -227,17 +227,21 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         user_tier = self.get_user_tier_from_request(request)
 
         # Get tier limits
-        tier_limits = self.tier_limits.get(user_tier, self.tier_limits[UserTier.FREE.value])
+        tier_limits = self.tier_limits.get(
+            user_tier, self.tier_limits[UserTier.FREE.value]
+        )
 
         # Check rate limits for all windows
         for window_name, max_requests in tier_limits.items():
             window_seconds = self.windows[window_name]
             rate_limit_key = f"{user_id}:{window_name}"
 
-            is_allowed, current_count, retry_after = await self.rate_limiter.check_rate_limit(
-                key=rate_limit_key,
-                max_requests=max_requests,
-                window_seconds=window_seconds
+            is_allowed, current_count, retry_after = (
+                await self.rate_limiter.check_rate_limit(
+                    key=rate_limit_key,
+                    max_requests=max_requests,
+                    window_seconds=window_seconds,
+                )
             )
 
             if not is_allowed:
@@ -248,7 +252,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     window=window_name,
                     current_count=current_count,
                     limit=max_requests,
-                    path=request.url.path
+                    path=request.url.path,
                 )
 
                 return JSONResponse(
@@ -261,15 +265,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                             "limit": max_requests,
                             "window": window_name,
                             "current": current_count,
-                            "retry_after": retry_after
-                        }
+                            "retry_after": retry_after,
+                        },
                     },
                     headers={
                         "Retry-After": str(retry_after),
                         "X-RateLimit-Limit": str(max_requests),
                         "X-RateLimit-Remaining": "0",
-                        "X-RateLimit-Reset": str(int(time.time()) + retry_after)
-                    }
+                        "X-RateLimit-Reset": str(int(time.time()) + retry_after),
+                    },
                 )
 
         # Process the request
@@ -282,8 +286,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         per_minute_key = f"{user_id}:per_minute"
 
         current_usage = await self.rate_limiter.get_current_usage(
-            per_minute_key,
-            per_minute_window
+            per_minute_key, per_minute_window
         )
 
         remaining = max(0, per_minute_limit - current_usage)

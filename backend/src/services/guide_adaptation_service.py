@@ -1,14 +1,15 @@
 """Guide adaptation service for handling impossible steps and generating alternatives."""
 
-from typing import Dict, Any, List, Optional, Tuple
-from uuid import UUID
 from datetime import datetime
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from typing import Any
+from uuid import UUID
 
-from ..models.database import GuideSessionModel, StepGuideModel, StepStatus
-from .llm_service import LLMService
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..models.database import GuideSessionModel, StepGuideModel
 from ..utils.logging import get_logger
+from .llm_service import LLMService
 
 logger = get_logger(__name__)
 
@@ -24,10 +25,10 @@ class GuideAdaptationService:
         session_id: UUID,
         problem_description: str,
         reason: str,
-        what_user_sees: Optional[str] = None,
-        attempted_solutions: Optional[List[str]] = None,
-        db: AsyncSession = None
-    ) -> Dict[str, Any]:
+        what_user_sees: str | None = None,
+        attempted_solutions: list[str] | None = None,
+        db: AsyncSession = None,
+    ) -> dict[str, Any]:
         """Handle a step that has become impossible and generate alternatives.
 
         Args:
@@ -45,7 +46,7 @@ class GuideAdaptationService:
             "adaptation_started",
             session_id=str(session_id),
             problem=problem_description,
-            reason=reason
+            reason=reason,
         )
 
         try:
@@ -60,7 +61,7 @@ class GuideAdaptationService:
                 problem_description=problem_description,
                 reason=reason,
                 what_user_sees=what_user_sees,
-                attempted_solutions=attempted_solutions
+                attempted_solutions=attempted_solutions,
             )
 
             # Generate alternative steps using LLM
@@ -68,11 +69,13 @@ class GuideAdaptationService:
 
             # Merge alternatives into guide structure
             # This returns the updated guide_data AND the list of created alternative step identifiers
-            updated_guide_data, alternative_identifiers = await self.merge_alternatives_into_guide(
-                guide_data=guide.guide_data,
-                current_step_identifier=session.current_step_identifier,
-                blocked_reason=problem_description,
-                alternative_steps=alternative_steps_data["alternative_steps"]
+            updated_guide_data, alternative_identifiers = (
+                await self.merge_alternatives_into_guide(
+                    guide_data=guide.guide_data,
+                    current_step_identifier=session.current_step_identifier,
+                    blocked_reason=problem_description,
+                    alternative_steps=alternative_steps_data["alternative_steps"],
+                )
             )
 
             # Update guide in database
@@ -85,9 +88,9 @@ class GuideAdaptationService:
                     "blocked_reason": problem_description,
                     "reason_category": reason,
                     "alternatives_added": alternative_identifiers,  # Use the identifiers created during merge
-                    "llm_provider": alternative_steps_data.get("provider", "unknown")
+                    "llm_provider": alternative_steps_data.get("provider", "unknown"),
                 },
-                db=db
+                db=db,
             )
 
             # Update session to point to first alternative
@@ -105,7 +108,7 @@ class GuideAdaptationService:
                 session_id=str(session_id),
                 alternatives_count=len(alternative_identifiers),
                 provider=alternative_steps_data.get("provider", "unknown"),
-                generation_time=alternative_steps_data.get("generation_time", 0)
+                generation_time=alternative_steps_data.get("generation_time", 0),
             )
 
             # Return response
@@ -118,7 +121,7 @@ class GuideAdaptationService:
                 "alternative_steps": alternative_steps_with_ids,
                 "current_step": self._find_step_by_identifier(
                     updated_guide_data, first_alternative_id
-                )
+                ),
             }
 
         except Exception as e:
@@ -126,7 +129,7 @@ class GuideAdaptationService:
                 "adaptation_failed",
                 session_id=str(session_id),
                 error=str(e),
-                error_type=type(e).__name__
+                error_type=type(e).__name__,
             )
             raise
 
@@ -136,9 +139,9 @@ class GuideAdaptationService:
         guide: StepGuideModel,
         problem_description: str,
         reason: str,
-        what_user_sees: Optional[str],
-        attempted_solutions: Optional[List[str]]
-    ) -> Dict[str, Any]:
+        what_user_sees: str | None,
+        attempted_solutions: list[str] | None,
+    ) -> dict[str, Any]:
         """Build context for LLM adaptation prompt."""
 
         guide_data = guide.guide_data
@@ -163,35 +166,39 @@ class GuideAdaptationService:
                 "description": problem_description,
                 "reason": reason,
                 "what_user_sees": what_user_sees or "Not specified",
-                "attempted_solutions": attempted_solutions or []
-            }
+                "attempted_solutions": attempted_solutions or [],
+            },
         }
 
-    async def request_alternative_steps(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    async def request_alternative_steps(
+        self, context: dict[str, Any]
+    ) -> dict[str, Any]:
         """Request alternative steps from LLM service."""
 
         # Generate alternatives using LLM
-        result, provider, generation_time = await self.llm_service.generate_step_alternatives(
-            original_goal=context["original_goal"],
-            completed_steps=context["completed_steps"],
-            blocked_step=context["blocked_step"],
-            problem=context["problem"]
+        result, provider, generation_time = (
+            await self.llm_service.generate_step_alternatives(
+                original_goal=context["original_goal"],
+                completed_steps=context["completed_steps"],
+                blocked_step=context["blocked_step"],
+                problem=context["problem"],
+            )
         )
 
         return {
             "alternative_steps": result.get("alternative_steps", []),
             "reason_for_change": result.get("reason_for_change", ""),
             "provider": provider,
-            "generation_time": generation_time
+            "generation_time": generation_time,
         }
 
     async def merge_alternatives_into_guide(
         self,
-        guide_data: Dict[str, Any],
+        guide_data: dict[str, Any],
         current_step_identifier: str,
         blocked_reason: str,
-        alternative_steps: List[Dict[str, Any]]
-    ) -> tuple[Dict[str, Any], List[str]]:
+        alternative_steps: list[dict[str, Any]],
+    ) -> tuple[dict[str, Any], list[str]]:
         """Merge alternative steps into the guide structure.
 
         This will:
@@ -205,6 +212,7 @@ class GuideAdaptationService:
 
         # Deep copy to avoid mutation
         import copy
+
         updated_guide_data = copy.deepcopy(guide_data)
 
         sections = updated_guide_data.get("sections", [])
@@ -214,8 +222,10 @@ class GuideAdaptationService:
         for section in sections:
             steps = section.get("steps", [])
             for i, step in enumerate(steps):
-                if step.get("step_identifier") == current_step_identifier or \
-                   str(step.get("step_index")) == current_step_identifier:
+                if (
+                    step.get("step_identifier") == current_step_identifier
+                    or str(step.get("step_index")) == current_step_identifier
+                ):
 
                     # Mark step as blocked
                     step["status"] = "blocked"
@@ -224,7 +234,7 @@ class GuideAdaptationService:
 
                     # Generate sub-indices for alternatives
                     base_identifier = current_step_identifier
-                    letters = ['a', 'b', 'c', 'd', 'e', 'f']
+                    letters = ["a", "b", "c", "d", "e", "f"]
 
                     # Create alternative steps with proper identifiers
                     alternatives_to_insert = []
@@ -235,19 +245,27 @@ class GuideAdaptationService:
 
                             alternative_step = {
                                 "step_identifier": alt_identifier,
-                                "step_index": step.get("step_index"),  # Same numeric index
+                                "step_index": step.get(
+                                    "step_index"
+                                ),  # Same numeric index
                                 "title": alt_step["title"],
                                 "description": alt_step["description"],
                                 "completion_criteria": alt_step["completion_criteria"],
-                                "assistance_hints": alt_step.get("assistance_hints", []),
-                                "estimated_duration_minutes": alt_step.get("estimated_duration_minutes", 5),
-                                "requires_desktop_monitoring": alt_step.get("requires_desktop_monitoring", False),
+                                "assistance_hints": alt_step.get(
+                                    "assistance_hints", []
+                                ),
+                                "estimated_duration_minutes": alt_step.get(
+                                    "estimated_duration_minutes", 5
+                                ),
+                                "requires_desktop_monitoring": alt_step.get(
+                                    "requires_desktop_monitoring", False
+                                ),
                                 "visual_markers": alt_step.get("visual_markers", []),
                                 "prerequisites": alt_step.get("prerequisites", []),
                                 "status": "alternative",
                                 "replaces_step_identifier": current_step_identifier,
                                 "completed": False,
-                                "needs_assistance": False
+                                "needs_assistance": False,
                             }
                             alternatives_to_insert.append(alternative_step)
 
@@ -262,9 +280,9 @@ class GuideAdaptationService:
     async def _update_guide_with_adaptation(
         self,
         guide: StepGuideModel,
-        updated_guide_data: Dict[str, Any],
-        adaptation_info: Dict[str, Any],
-        db: AsyncSession
+        updated_guide_data: dict[str, Any],
+        adaptation_info: dict[str, Any],
+        db: AsyncSession,
     ):
         """Update guide in database with adaptation."""
 
@@ -273,38 +291,43 @@ class GuideAdaptationService:
         adaptation_history.append(adaptation_info)
 
         # Update guide
-        update_query = update(StepGuideModel).where(
-            StepGuideModel.guide_id == guide.guide_id
-        ).values(
-            guide_data=updated_guide_data,
-            adaptation_history=adaptation_history,
-            last_adapted_at=datetime.utcnow()
+        update_query = (
+            update(StepGuideModel)
+            .where(StepGuideModel.guide_id == guide.guide_id)
+            .values(
+                guide_data=updated_guide_data,
+                adaptation_history=adaptation_history,
+                last_adapted_at=datetime.utcnow(),
+            )
         )
 
         await db.execute(update_query)
         await db.commit()
 
     async def _update_session_step(
-        self,
-        session_id: UUID,
-        new_step_identifier: str,
-        db: AsyncSession
+        self, session_id: UUID, new_step_identifier: str, db: AsyncSession
     ):
         """Update session to point to new step."""
 
-        update_query = update(GuideSessionModel).where(
-            GuideSessionModel.session_id == session_id
-        ).values(
-            current_step_identifier=new_step_identifier,
-            updated_at=datetime.utcnow()
+        update_query = (
+            update(GuideSessionModel)
+            .where(GuideSessionModel.session_id == session_id)
+            .values(
+                current_step_identifier=new_step_identifier,
+                updated_at=datetime.utcnow(),
+            )
         )
 
         await db.execute(update_query)
         await db.commit()
 
-    async def _get_session(self, session_id: UUID, db: AsyncSession) -> GuideSessionModel:
+    async def _get_session(
+        self, session_id: UUID, db: AsyncSession
+    ) -> GuideSessionModel:
         """Get session from database."""
-        query = select(GuideSessionModel).where(GuideSessionModel.session_id == session_id)
+        query = select(GuideSessionModel).where(
+            GuideSessionModel.session_id == session_id
+        )
         result = await db.execute(query)
         session = result.scalar_one_or_none()
 
@@ -325,26 +348,24 @@ class GuideAdaptationService:
         return guide
 
     def _find_step_by_identifier(
-        self,
-        guide_data: Dict[str, Any],
-        step_identifier: str
-    ) -> Optional[Dict[str, Any]]:
+        self, guide_data: dict[str, Any], step_identifier: str
+    ) -> dict[str, Any] | None:
         """Find a step by its identifier."""
         sections = guide_data.get("sections", [])
 
         for section in sections:
             for step in section.get("steps", []):
-                if step.get("step_identifier") == step_identifier or \
-                   str(step.get("step_index")) == step_identifier:
+                if (
+                    step.get("step_identifier") == step_identifier
+                    or str(step.get("step_index")) == step_identifier
+                ):
                     return step
 
         return None
 
     def _get_completed_steps(
-        self,
-        guide_data: Dict[str, Any],
-        current_step_id: str
-    ) -> List[Dict[str, Any]]:
+        self, guide_data: dict[str, Any], current_step_id: str
+    ) -> list[dict[str, Any]]:
         """Get all steps completed before current step."""
         completed = []
         sections = guide_data.get("sections", [])
@@ -353,19 +374,21 @@ class GuideAdaptationService:
             for step in section.get("steps", []):
                 step_id = step.get("step_identifier", str(step.get("step_index")))
                 if self._is_step_before(step_id, current_step_id):
-                    completed.append({
-                        "title": step.get("title"),
-                        "identifier": step_id,
-                        "description": step.get("description", "")[:100]  # Truncate
-                    })
+                    completed.append(
+                        {
+                            "title": step.get("title"),
+                            "identifier": step_id,
+                            "description": step.get("description", "")[
+                                :100
+                            ],  # Truncate
+                        }
+                    )
 
         return completed
 
     def _get_remaining_steps(
-        self,
-        guide_data: Dict[str, Any],
-        current_step_id: str
-    ) -> List[Dict[str, Any]]:
+        self, guide_data: dict[str, Any], current_step_id: str
+    ) -> list[dict[str, Any]]:
         """Get all steps after current step."""
         remaining = []
         sections = guide_data.get("sections", [])
@@ -387,7 +410,9 @@ class GuideAdaptationService:
 
         def natural_sort_key(s):
             """Convert string to list of ints and strings for natural sorting."""
-            return [int(text) if text.isdigit() else text.lower()
-                    for text in re.split('([0-9]+)', s)]
+            return [
+                int(text) if text.isdigit() else text.lower()
+                for text in re.split("([0-9]+)", s)
+            ]
 
         return natural_sort_key(step_id1) < natural_sort_key(step_id2)

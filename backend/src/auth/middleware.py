@@ -1,16 +1,15 @@
 """Authentication middleware for JWT token validation."""
 
-import jwt
-from jwt.exceptions import PyJWTError
-from typing import Optional, Callable
+from collections.abc import Callable
 from datetime import datetime, timedelta
 
-from fastapi import HTTPException, status, Depends, Request, Response
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.ext.asyncio import AsyncSession
+import jwt
+from fastapi import Depends, HTTPException, Request, Response, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt.exceptions import PyJWTError
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.types import ASGIApp
 
 from ..core.config import get_settings
 from ..core.database import get_db
@@ -24,18 +23,23 @@ logger = get_logger(__name__)
 
 class AuthenticationError(Exception):
     """Exception raised when authentication fails."""
+
     pass
 
 
-def create_access_token(user_id: str, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(user_id: str, expires_delta: timedelta | None = None) -> str:
     """Create a JWT access token."""
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.access_token_expire_minutes)
+        expire = datetime.utcnow() + timedelta(
+            minutes=settings.access_token_expire_minutes
+        )
 
     to_encode = {"sub": user_id, "exp": expire}
-    encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
+    encoded_jwt = jwt.encode(
+        to_encode, settings.secret_key, algorithm=settings.algorithm
+    )
     return encoded_jwt
 
 
@@ -46,7 +50,9 @@ def verify_token(token: str) -> str:
         return "dev-user-id"
 
     try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        payload = jwt.decode(
+            token, settings.secret_key, algorithms=[settings.algorithm]
+        )
         user_id: str = payload.get("sub")
         if user_id is None:
             raise AuthenticationError("Invalid token: missing user_id")
@@ -59,7 +65,7 @@ def verify_token(token: str) -> str:
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ) -> UserModel:
     """Dependency to get current authenticated user.
 
@@ -85,7 +91,7 @@ async def get_current_user(
                     tier="free",
                     full_name="Dev User",
                     is_active=True,
-                    is_verified=True
+                    is_verified=True,
                 )
                 db.add(user)
                 await db.commit()
@@ -94,9 +100,7 @@ async def get_current_user(
             return user
 
         # Look up user in database
-        result = await db.execute(
-            select(UserModel).where(UserModel.user_id == user_id)
-        )
+        result = await db.execute(select(UserModel).where(UserModel.user_id == user_id))
         user = result.scalar_one_or_none()
 
         if not user:
@@ -117,9 +121,11 @@ async def get_current_user(
 
 # Optional dependency for routes that don't require authentication
 async def get_current_user_optional(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
-    db: AsyncSession = Depends(get_db)
-) -> Optional[UserModel]:
+    credentials: HTTPAuthorizationCredentials | None = Depends(
+        HTTPBearer(auto_error=False)
+    ),
+    db: AsyncSession = Depends(get_db),
+) -> UserModel | None:
     """Optional dependency to get current user if authenticated."""
     if not credentials:
         return None
@@ -135,9 +141,7 @@ async def get_current_user_optional(
             return result.scalar_one_or_none()
 
         # Look up user in database
-        result = await db.execute(
-            select(UserModel).where(UserModel.user_id == user_id)
-        )
+        result = await db.execute(select(UserModel).where(UserModel.user_id == user_id))
         user = result.scalar_one_or_none()
 
         if user and user.is_active:
@@ -176,6 +180,7 @@ class UserPopulationMiddleware(BaseHTTPMiddleware):
 
             # Get database session
             from ..core.database import db_manager
+
             async with db_manager.get_session() as db:
                 # For development mode with dev-test-token
                 if settings.environment == "development" and user_id == "dev-user-id":
@@ -193,7 +198,7 @@ class UserPopulationMiddleware(BaseHTTPMiddleware):
                             tier="free",
                             full_name="Dev User",
                             is_active=True,
-                            is_verified=True
+                            is_verified=True,
                         )
                         db.add(user)
                         await db.commit()

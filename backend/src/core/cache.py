@@ -1,16 +1,16 @@
 """Enhanced Redis cache wrapper with graceful degradation."""
 
-import json
 import hashlib
-from typing import Any, Dict, Optional, Callable
-from datetime import timedelta
+import json
+from collections.abc import Callable
 from functools import wraps
+from typing import Any
 
 import redis.asyncio as redis
 from redis.asyncio import Redis
 
-from .config import get_settings
 from ..utils.logging import get_logger
+from .config import get_settings
 
 logger = get_logger(__name__)
 
@@ -36,7 +36,7 @@ class CacheManager:
     def __init__(self):
         """Initialize cache manager."""
         self.settings = get_settings()
-        self.redis_client: Optional[Redis] = None
+        self.redis_client: Redis | None = None
         self.is_available = False
         self._initialized = False
 
@@ -66,7 +66,7 @@ class CacheManager:
             logger.warning(
                 "cache_unavailable",
                 error=str(e),
-                message="Cache will operate in fallback mode (no caching)"
+                message="Cache will operate in fallback mode (no caching)",
             )
 
         self._initialized = True
@@ -80,7 +80,7 @@ class CacheManager:
             self._initialized = False
             logger.info("cache_closed")
 
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Any | None:
         """
         Get value from cache.
 
@@ -106,11 +106,7 @@ class CacheManager:
             return None
 
     async def set(
-        self,
-        key: str,
-        value: Any,
-        ttl: Optional[int] = None,
-        nx: bool = False
+        self, key: str, value: Any, ttl: int | None = None, nx: bool = False
     ) -> bool:
         """
         Set value in cache with optional TTL.
@@ -267,11 +263,7 @@ class CacheManager:
 
 
 # Decorator for caching function results
-def cached(
-    ttl: int,
-    key_prefix: str,
-    key_builder: Optional[Callable] = None
-):
+def cached(ttl: int, key_prefix: str, key_builder: Callable | None = None):
     """
     Decorator for caching function results.
 
@@ -286,6 +278,7 @@ def cached(
             # ... expensive operation ...
             return guide_data
     """
+
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -316,6 +309,7 @@ def cached(
             return result
 
         return wrapper
+
     return decorator
 
 

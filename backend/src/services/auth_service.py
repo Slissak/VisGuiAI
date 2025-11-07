@@ -2,15 +2,13 @@
 
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from fastapi import HTTPException, status
 from passlib.context import CryptContext
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.user import UserModel
-
 
 # Password hashing context using bcrypt
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -43,7 +41,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-async def get_user_by_email(db: AsyncSession, email: str) -> Optional[UserModel]:
+async def get_user_by_email(db: AsyncSession, email: str) -> UserModel | None:
     """
     Look up a user by email address (case-insensitive).
 
@@ -59,7 +57,7 @@ async def get_user_by_email(db: AsyncSession, email: str) -> Optional[UserModel]
     return result.scalar_one_or_none()
 
 
-async def get_user_by_id(db: AsyncSession, user_id: str) -> Optional[UserModel]:
+async def get_user_by_id(db: AsyncSession, user_id: str) -> UserModel | None:
     """
     Look up a user by their user ID.
 
@@ -79,8 +77,8 @@ async def create_user(
     db: AsyncSession,
     email: str,
     password: str,
-    full_name: Optional[str] = None,
-    tier: str = "free"
+    full_name: str | None = None,
+    tier: str = "free",
 ) -> UserModel:
     """
     Create a new user account.
@@ -102,8 +100,7 @@ async def create_user(
     existing_user = await get_user_by_email(db, email)
     if existing_user:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
         )
 
     # Generate unique user ID
@@ -120,7 +117,7 @@ async def create_user(
         full_name=full_name,
         tier=tier,
         is_active=True,
-        is_verified=False
+        is_verified=False,
     )
 
     # Add to database
@@ -132,10 +129,8 @@ async def create_user(
 
 
 async def authenticate_user(
-    db: AsyncSession,
-    email: str,
-    password: str
-) -> Optional[UserModel]:
+    db: AsyncSession, email: str, password: str
+) -> UserModel | None:
     """
     Authenticate a user by email and password.
 

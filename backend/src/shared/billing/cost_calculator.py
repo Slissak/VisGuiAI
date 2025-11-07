@@ -14,7 +14,9 @@ class CostCalculator:
         self.pricing_data = config_loader.get_pricing_data()
         logger.info(f"CostCalculator initialized with {len(self.pricing_data)} models")
 
-    def calculate_cost(self, model: str, prompt_tokens: int, completion_tokens: int) -> float:
+    def calculate_cost(
+        self, model: str, prompt_tokens: int, completion_tokens: int
+    ) -> float:
         """
         Calculate the cost of a request given the model and token counts.
 
@@ -27,12 +29,18 @@ class CostCalculator:
             Cost in USD
         """
         if model not in self.pricing_data:
-            logger.warning(f"Model '{model}' not found in pricing data. Returning $0.00")
+            logger.warning(
+                f"Model '{model}' not found in pricing data. Returning $0.00"
+            )
             return 0.0
 
         pricing = self.pricing_data[model]
-        input_cost = (prompt_tokens / 1000) * pricing.get('input_cost_per_1k_tokens', 0.0)
-        output_cost = (completion_tokens / 1000) * pricing.get('output_cost_per_1k_tokens', 0.0)
+        input_cost = (prompt_tokens / 1000) * pricing.get(
+            "input_cost_per_1k_tokens", 0.0
+        )
+        output_cost = (completion_tokens / 1000) * pricing.get(
+            "output_cost_per_1k_tokens", 0.0
+        )
 
         total_cost = input_cost + output_cost
 

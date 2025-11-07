@@ -2,19 +2,17 @@
 
 import re
 import uuid
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
+from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from passlib.context import CryptContext
 
+from ..auth.middleware import create_access_token, get_current_user
 from ..core.database import get_db
 from ..models.user import UserModel, UserTier
-from ..auth.middleware import get_current_user, create_access_token
-
 
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -26,6 +24,7 @@ router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 # ============================================================================
 # Pydantic Models
 # ============================================================================
+
 
 class RegisterRequest(BaseModel):
     """Request model for user registration.
@@ -42,11 +41,12 @@ class RegisterRequest(BaseModel):
             "full_name": "John Doe"
         }
     """
+
     email: EmailStr
     password: str
-    full_name: Optional[str] = None
+    full_name: str | None = None
 
-    @field_validator('password')
+    @field_validator("password")
     @classmethod
     def validate_password_strength(cls, v: str) -> str:
         """Validate password meets strength requirements.
@@ -67,13 +67,13 @@ class RegisterRequest(BaseModel):
             ValueError: If password doesn't meet requirements
         """
         if len(v) < 8:
-            raise ValueError('Password must be at least 8 characters long')
-        if not re.search(r'[A-Z]', v):
-            raise ValueError('Password must contain at least one uppercase letter')
-        if not re.search(r'[a-z]', v):
-            raise ValueError('Password must contain at least one lowercase letter')
-        if not re.search(r'\d', v):
-            raise ValueError('Password must contain at least one number')
+            raise ValueError("Password must be at least 8 characters long")
+        if not re.search(r"[A-Z]", v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not re.search(r"[a-z]", v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not re.search(r"\d", v):
+            raise ValueError("Password must contain at least one number")
         return v
 
 
@@ -90,6 +90,7 @@ class LoginRequest(BaseModel):
             "password": "SecurePass123"
         }
     """
+
     email: EmailStr
     password: str
 
@@ -117,9 +118,10 @@ class UserResponse(BaseModel):
             "created_at": "2024-01-15T10:30:00Z"
         }
     """
+
     user_id: str
     email: str
-    full_name: Optional[str]
+    full_name: str | None
     tier: str
     is_active: bool
     is_verified: bool
@@ -151,6 +153,7 @@ class LoginResponse(BaseModel):
             }
         }
     """
+
     access_token: str
     token_type: str
     user: UserResponse
@@ -167,12 +170,14 @@ class LogoutResponse(BaseModel):
             "message": "Successfully logged out"
         }
     """
+
     message: str
 
 
 # ============================================================================
 # Helper Functions
 # ============================================================================
+
 
 def hash_password(password: str) -> str:
     """Hash a password using bcrypt.
@@ -199,7 +204,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-async def get_user_by_email(db: AsyncSession, email: str) -> Optional[UserModel]:
+async def get_user_by_email(db: AsyncSession, email: str) -> UserModel | None:
     """Get a user by email address.
 
     Args:
@@ -209,17 +214,12 @@ async def get_user_by_email(db: AsyncSession, email: str) -> Optional[UserModel]
     Returns:
         User model if found, None otherwise
     """
-    result = await db.execute(
-        select(UserModel).where(UserModel.email == email)
-    )
+    result = await db.execute(select(UserModel).where(UserModel.email == email))
     return result.scalar_one_or_none()
 
 
 async def create_user(
-    db: AsyncSession,
-    email: str,
-    password: str,
-    full_name: Optional[str] = None
+    db: AsyncSession, email: str, password: str, full_name: str | None = None
 ) -> UserModel:
     """Create a new user account.
 
@@ -239,8 +239,7 @@ async def create_user(
     existing_user = await get_user_by_email(db, email)
     if existing_user:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
         )
 
     # Create new user
@@ -251,7 +250,7 @@ async def create_user(
         full_name=full_name,
         tier=UserTier.FREE.value,
         is_active=True,
-        is_verified=False
+        is_verified=False,
     )
 
     db.add(user)
@@ -262,10 +261,8 @@ async def create_user(
 
 
 async def authenticate_user(
-    db: AsyncSession,
-    email: str,
-    password: str
-) -> Optional[UserModel]:
+    db: AsyncSession, email: str, password: str
+) -> UserModel | None:
     """Authenticate a user by email and password.
 
     Args:
@@ -288,6 +285,7 @@ async def authenticate_user(
 # API Endpoints
 # ============================================================================
 
+
 @router.post(
     "/register",
     response_model=UserResponse,
@@ -305,18 +303,16 @@ async def authenticate_user(
                         "tier": "free",
                         "is_active": True,
                         "is_verified": False,
-                        "created_at": "2024-01-15T10:30:00Z"
+                        "created_at": "2024-01-15T10:30:00Z",
                     }
                 }
-            }
+            },
         },
         400: {
             "description": "Email already registered",
             "content": {
-                "application/json": {
-                    "example": {"detail": "Email already registered"}
-                }
-            }
+                "application/json": {"example": {"detail": "Email already registered"}}
+            },
         },
         422: {
             "description": "Validation error (invalid email or weak password)",
@@ -327,18 +323,17 @@ async def authenticate_user(
                             {
                                 "type": "value_error",
                                 "loc": ["body", "password"],
-                                "msg": "Password must be at least 8 characters long"
+                                "msg": "Password must be at least 8 characters long",
                             }
                         ]
                     }
                 }
-            }
-        }
-    }
+            },
+        },
+    },
 )
 async def register(
-    request: RegisterRequest,
-    db: AsyncSession = Depends(get_db)
+    request: RegisterRequest, db: AsyncSession = Depends(get_db)
 ) -> UserResponse:
     """Register a new user account.
 
@@ -367,7 +362,7 @@ async def register(
         db=db,
         email=request.email,
         password=request.password,
-        full_name=request.full_name
+        full_name=request.full_name,
     )
 
     return UserResponse.model_validate(user)
@@ -393,11 +388,11 @@ async def register(
                             "tier": "free",
                             "is_active": True,
                             "is_verified": False,
-                            "created_at": "2024-01-15T10:30:00Z"
-                        }
+                            "created_at": "2024-01-15T10:30:00Z",
+                        },
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Invalid credentials",
@@ -405,21 +400,18 @@ async def register(
                 "application/json": {
                     "example": {"detail": "Incorrect email or password"}
                 }
-            }
+            },
         },
         403: {
             "description": "User account is not active",
             "content": {
-                "application/json": {
-                    "example": {"detail": "User account is inactive"}
-                }
-            }
-        }
-    }
+                "application/json": {"example": {"detail": "User account is inactive"}}
+            },
+        },
+    },
 )
 async def login(
-    request: LoginRequest,
-    db: AsyncSession = Depends(get_db)
+    request: LoginRequest, db: AsyncSession = Depends(get_db)
 ) -> LoginResponse:
     """Login with email and password to obtain an access token.
 
@@ -448,13 +440,12 @@ async def login(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"}
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     if not user.is_active:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is inactive"
+            status_code=status.HTTP_403_FORBIDDEN, detail="User account is inactive"
         )
 
     # Update last login timestamp
@@ -474,7 +465,7 @@ async def login(
     return LoginResponse(
         access_token=access_token,
         token_type="bearer",
-        user=UserResponse.model_validate(user)
+        user=UserResponse.model_validate(user),
     )
 
 
@@ -495,23 +486,19 @@ async def login(
                         "tier": "free",
                         "is_active": True,
                         "is_verified": False,
-                        "created_at": "2024-01-15T10:30:00Z"
+                        "created_at": "2024-01-15T10:30:00Z",
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Not authenticated or invalid token",
-            "content": {
-                "application/json": {
-                    "example": {"detail": "Invalid token"}
-                }
-            }
-        }
-    }
+            "content": {"application/json": {"example": {"detail": "Invalid token"}}},
+        },
+    },
 )
 async def get_current_user_profile(
-    current_user: UserModel = Depends(get_current_user)
+    current_user: UserModel = Depends(get_current_user),
 ) -> UserResponse:
     """Get the current authenticated user's profile information.
 
@@ -543,12 +530,10 @@ async def get_current_user_profile(
         200: {
             "description": "Successfully logged out",
             "content": {
-                "application/json": {
-                    "example": {"message": "Successfully logged out"}
-                }
-            }
+                "application/json": {"example": {"message": "Successfully logged out"}}
+            },
         }
-    }
+    },
 )
 async def logout() -> LogoutResponse:
     """Logout the current user.
